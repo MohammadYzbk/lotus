@@ -1109,3 +1109,24 @@ body.resizing *:not(.gutter) {
 .sheet-check:hover {
   color: var(--fg);
 }
+
+/* --- preview focus ----------------------------------------------------------
+ *
+ * Reading mode: the PDF gets the window. display:none rather than zero-width
+ * columns, so the editor and tree stop laying out entirely instead of being
+ * squeezed to nothing and still costing work on every resize. */
+
+.panes.preview-focus {
+  grid-template-columns: 1fr;
+}
+
+.panes.preview-focus > :not(.pane.preview) {
+  display: none;
+}
+
+/* Separated from the zoom buttons: it changes the layout, not the document. */
+.zoom-expand {
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+}
+
