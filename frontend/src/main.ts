@@ -18,6 +18,7 @@ import { outline, type OutlineItem } from './latex/outline';
 import { cycleTheme, initTheme, onThemeChange, themePreference } from './theme';
 import { connectGitHub, openGitHubRepository } from './github';
 import { openGitSheet, publishSheet } from './git';
+import { applyColors, openSettings } from './settings';
 import {
   Compile,
   ForwardSearch,
@@ -90,6 +91,7 @@ document.querySelector('#app')!.innerHTML = `
         <button class="zoom-btn" id="zoom-out" title="Zoom out (Cmd−)">−</button>
         <button class="zoom-btn zoom-level" id="zoom-level" title="Fit to width (Cmd-0)">fit</button>
         <button class="zoom-btn" id="zoom-in" title="Zoom in (Cmd+)">+</button>
+        <button class="zoom-btn zoom-expand" id="preview-focus" title="Give the window to the preview (⌘⇧↵)">⤢</button>
       </div>
     </section>
   </main>
@@ -507,6 +509,31 @@ function applyDiagnosticsToEditor() {
   editor?.setProblems(diagnostics.filter((d) => d.file === openFile));
 }
 
+// --- preview focus -----------------------------------------------------------
+
+// Giving the whole window to the PDF, for reading rather than writing.
+//
+// Deliberately not persisted: it is a mode you enter to read a few pages, and
+// reopening the app into a hidden editor would be a puzzle rather than a
+// convenience.
+let previewFocused = false;
+
+function setPreviewFocus(on: boolean) {
+  previewFocused = on;
+  document.querySelector('.panes')!.classList.toggle('preview-focus', on);
+
+  const button = el('preview-focus');
+  button.textContent = on ? '⤡' : '⤢';
+  button.title = on ? 'Restore the editor (⌘⇧↵)' : 'Give the window to the preview (⌘⇧↵)';
+
+  if (!on && editor) {
+    // CodeMirror measures lazily and was display:none while focused, so its
+    // scroller has stale geometry until it is asked to look again.
+    editor.view.requestMeasure();
+    editor.focus();
+  }
+}
+
 // --- pinch to zoom -----------------------------------------------------------
 
 /**
@@ -826,12 +853,19 @@ function paletteActions(): PaletteAction[] {
     { id: 'problems', title: 'Show problems', run: () => { pinnedView = 'problems'; showView('problems', true); } },
     { id: 'log', title: 'Show raw log', run: () => { pinnedView = 'log'; showView('log', true); } },
     { id: 'theme', title: 'Switch theme (system, light, dark)', run: () => cycleTheme() },
+    { id: 'settings', title: 'Customise colours…', hint: '⌘,', run: () => openSettings() },
     { id: 'fullscreen', title: 'Toggle full screen', hint: '⌃⌘F', run: () => void ToggleFullscreen() },
     {
       id: 'synctex',
       title: syncEnabled ? 'Turn SyncTeX off' : 'Turn SyncTeX on',
       hint: syncEnabled ? 'on' : 'off',
       run: () => setSyncEnabled(!syncEnabled),
+    },
+    {
+      id: 'preview-focus',
+      title: previewFocused ? 'Restore the editor' : 'Give the window to the preview',
+      hint: '⌘⇧↵',
+      run: () => setPreviewFocus(!previewFocused),
     },
     { id: 'zoom-in', title: 'Zoom in', hint: '⌘+', run: () => preview.zoomIn() },
     { id: 'zoom-out', title: 'Zoom out', hint: '⌘−', run: () => preview.zoomOut() },
@@ -889,6 +923,7 @@ el('zoom-out').addEventListener('click', () => preview.zoomOut());
 el('zoom-level').addEventListener('click', () =>
   preview.zoom() === 'fit' ? preview.actualSize() : preview.fitWidth(),
 );
+el('preview-focus').addEventListener('click', () => setPreviewFocus(!previewFocused));
 // The branch badge is the obvious place to look for anything Git-related.
 el('git').addEventListener('click', () => openGit());
 el('theme').addEventListener('click', () => cycleTheme());
@@ -919,6 +954,11 @@ window.addEventListener('keydown', (event) => {
 
   // Cmd-Shift-P / Cmd-Shift-O address the palette's other modes.
   if (event.shiftKey) {
+    if (key === 'enter') {
+      event.preventDefault();
+      setPreviewFocus(!previewFocused);
+      return;
+    }
     if (key === 'p') {
       event.preventDefault();
       palette.open('>');
@@ -934,6 +974,12 @@ window.addEventListener('keydown', (event) => {
   if (event.ctrlKey && event.metaKey && key === 'f') {
     event.preventDefault();
     void ToggleFullscreen();
+    return;
+  }
+
+  if (key === ',') {
+    event.preventDefault();
+    openSettings();
     return;
   }
 
@@ -977,7 +1023,9 @@ async function init() {
   mountPanes(document.querySelector<HTMLElement>('.panes')!);
   wirePinchZoom(pdfEl);
   initTheme();
+  applyColors();
   renderThemeButton();
+  setPreviewFocus(false);
   renderSyncState();
 
   EngineVersion()
