@@ -20,24 +20,89 @@ a single codebase.
 - Completes LaTeX commands, environments, and math snippets, plus `\ref` and
   `\cite` targets scanned from the whole project rather than the open buffer.
 - Has a command palette (`Cmd-K`), a document outline, and light/dark theming
-  that follows the system or an explicit choice.
+  that follows the system or an explicit choice, with the main colours
+  adjustable per theme.
+- Gives the whole window to the preview for reading.
 - Connects a GitHub account, clones a repository into a managed working copy,
   and opens it as a project, showing the current branch and whether there is
   uncommitted work.
+- Branches, commits, pushes, and opens a pull request without leaving the app.
+- Fetches, reports how far a branch has drifted from its remote, and pulls by
+  fast-forward or rebase, surfacing conflicts for resolution in the editor.
+- Publishes a folder that was never under version control as a new repository.
 
 Against the phased build plan in
-[`docs/project-plan.md`](docs/project-plan.md), Phases 0-6 (foundations,
-vertical slice, the live-ish compile loop, projects as folders, bidirectional
-SyncTeX, editor UX polish, and connecting to GitHub) are in place. Phases 7-9
-(the branch and pull-request workflow, sync robustness, packaging) are not
-started.
+[`docs/project-plan.md`](docs/project-plan.md), Phases 0-8 are in place:
+foundations, the vertical slice, the live-ish compile loop, projects as folders,
+bidirectional SyncTeX, editor UX polish, connecting to GitHub, the branch and
+pull-request workflow, and sync robustness. Publishing a plain folder as a new
+repository is there too, which the plan never listed. Phase 9, packaging and
+distribution, is not started. The OAuth device flow and pull-request creation
+are covered by tests against a stubbed server but have never run against real
+GitHub; [`docs/architecture.md`](docs/architecture.md) lists that and the other
+known gaps.
 
 Collaboration, plugins, AI, and telemetry remain out of scope.
+
+## Shortcuts
+
+`Cmd` throughout; `Ctrl` works in its place on Windows and Linux, since the
+handler accepts either modifier.
+
+### The palette
+
+| Key | Does |
+| --- | --- |
+| `Cmd-K`, `Cmd-P` | Open a file |
+| `Cmd-Shift-P` | Run a command |
+| `Cmd-Shift-O` | Go to a heading |
+| `Cmd-G` | Go to a line |
+
+Once it is open, `↑`/`↓` or `Ctrl-P`/`Ctrl-N` move, `Enter` chooses, `Esc`
+dismisses. Typing `>`, `@`, or `:` as the first character switches mode without
+reopening, and the command list shows each command's own key beside it.
+
+### Writing
+
+| Key | Does |
+| --- | --- |
+| `Cmd-S` | Save and compile |
+| `Cmd-Space` | Complete a command, environment, `\ref`, or `\cite` |
+| `Enter` | Accept the highlighted completion |
+| `Tab` | Next snippet field, or indent |
+| `Cmd-Z`, `Cmd-Shift-Z` | Undo, redo |
+
+### Preview
+
+| Key | Does |
+| --- | --- |
+| `Cmd-J` | Show the cursor's line in the PDF |
+| Click the page | Jump back to that spot in the source |
+| `Cmd-+`, `Cmd-−` | Zoom in, out |
+| `Cmd-0` | Fit to width |
+| Pinch on a trackpad | Zoom |
+| `Cmd-Shift-Return` | Give the whole window to the preview, and back |
+
+### Window and dialogs
+
+| Key | Does |
+| --- | --- |
+| `Ctrl-Cmd-F` | Full screen, on the macOS convention |
+| `Cmd-,` | Colour settings |
+| `Esc` | Dismiss the open sheet |
+| `Enter` | Confirm a field: a branch name, a token, a repository search |
+| `Cmd-Enter` | Commit, from the message box |
+| Double-click a divider | Reset that pane split |
 
 ## Repository layout
 
 ```text
 main.go, app.go           Wails entrypoint and the bound app API
+app_github.go             Sign-in, the account, the repository list
+app_git.go                Branch, commit, push, pull request
+app_sync.go               Fetch, divergence, pull, rebase, conflicts
+app_publish.go            Turning a plain folder into a new repository
+app_manifest_*.go         Per-platform paths, behind build tags
 pdfserver.go              Serves compiled PDFs to the frontend
 settings.go               Persisted user settings
 internal/
@@ -45,13 +110,16 @@ internal/
   texlog/                 Engine log parsing into diagnostics
   synctex/                SyncTeX parser for source/preview navigation
   project/                Project folder and file handling
-  forge/                  GitHub sign-in and repository listing
-  vcs/                    Cloning and working-copy state, over go-git
+  forge/                  GitHub sign-in, repositories, pull requests
+  vcs/                    Working-copy state and Git operations, over go-git
   secrets/                The GitHub token, in the OS keychain
 frontend/                 Vite + TypeScript UI (CodeMirror editor, pdf.js preview)
   src/latex/              LaTeX vocabulary, completion sources, outline parsing
   src/palette.ts          Command palette (commands, files, headings, go-to-line)
   src/theme.ts            Light/dark tokens shared by the chrome and the editor
+  src/settings.ts         The adjustable colours, per theme
+  src/preview.ts          pdf.js rendering, zoom, the SyncTeX highlight
+  src/git.ts, github.ts   The Git and GitHub sheets
 build/                    Wails packaging inputs for darwin and windows
 ```
 
