@@ -99,6 +99,8 @@ disk.
   Code reaches the same entrypoint through [`CLAUDE.md`](CLAUDE.md).
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch, commit, and pull-request
   format.
+- [`docs/architecture.md`](docs/architecture.md) for how the application
+  actually runs: startup, the compile loop, and how each subsystem hangs off it.
 - [`docs/project-plan.md`](docs/project-plan.md) for the vision, architecture,
   stack decisions, and the phased build plan.
 - [`CONTEXT.md`](CONTEXT.md) for product vocabulary.
