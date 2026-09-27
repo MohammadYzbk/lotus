@@ -21,7 +21,7 @@ interface Divider {
   minimum: number;
 }
 
-const STORAGE_KEY = 'latem.panes';
+const STORAGE_KEY = 'lotus.panes';
 
 // Floors, not preferences: below these a pane holds nothing useful, and a
 // divider dragged to the edge becomes impossible to grab again.

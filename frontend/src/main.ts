@@ -579,7 +579,7 @@ function wirePinchZoom(target: HTMLElement) {
 //
 // The choice is remembered, because the reason to turn the feature off is
 // usually to work without it for a while, not for a single session.
-const SYNC_STORAGE_KEY = 'latem.synctex.enabled';
+const SYNC_STORAGE_KEY = 'lotus.synctex.enabled';
 
 let syncEnabled = readSyncEnabled();
 

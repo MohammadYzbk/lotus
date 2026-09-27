@@ -1,4 +1,4 @@
-module github.com/MohammadYzbk/latem
+module github.com/MohammadYzbk/lotus
 
 go 1.25.0
 

@@ -12,7 +12,7 @@ import { tags as t } from '@lezer/highlight';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
-const STORAGE_KEY = 'latem.theme';
+const STORAGE_KEY = 'lotus.theme';
 
 /** Only the `dark` flag actually changes; the colours are CSS variables. */
 export const themeCompartment = new Compartment();

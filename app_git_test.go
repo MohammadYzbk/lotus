@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MohammadYzbk/latem/internal/vcs"
+	"github.com/MohammadYzbk/lotus/internal/vcs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"

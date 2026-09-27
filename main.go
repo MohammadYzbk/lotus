@@ -1,4 +1,4 @@
-// Command latem is an offline-first desktop LaTeX editor. It orchestrates an
+// Command lotus is an offline-first desktop LaTeX editor. It orchestrates an
 // external TeX engine rather than implementing one, and wraps it in a modern
 // editing experience.
 package main
@@ -21,7 +21,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "latem",
+		Title:  "lotus",
 		Width:  1024,
 		Height: 768,
 		AssetServer: &assetserver.Options{

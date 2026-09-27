@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohammadYzbk/latem/internal/project"
+	"github.com/MohammadYzbk/lotus/internal/project"
 )
 
 func TestDiagnosticsResolveIncludedSourceThroughSymlinkedProjectRoot(t *testing.T) {

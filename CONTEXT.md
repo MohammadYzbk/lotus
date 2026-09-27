@@ -1,7 +1,7 @@
-# Latem Product Language
+# Lotus Product Language
 
-Canonical vocabulary for Latem's product references and for naming the delivery
-stages that lead to release. Latem is one cross-platform application, so this
+Canonical vocabulary for Lotus's product references and for naming the delivery
+stages that lead to release. Lotus is one cross-platform application, so this
 vocabulary is platform-neutral.
 
 ## Product references

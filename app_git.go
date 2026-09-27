@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/MohammadYzbk/latem/internal/forge"
-	"github.com/MohammadYzbk/latem/internal/vcs"
+	"github.com/MohammadYzbk/lotus/internal/forge"
+	"github.com/MohammadYzbk/lotus/internal/vcs"
 )
 
 // GitResult carries the working copy's state after an operation, so the UI

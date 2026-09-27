@@ -1,4 +1,4 @@
-# Latem agent guidance
+# Lotus agent guidance
 
 The user's current request and any issue or specification they name define
 the work scope and take precedence over repository and skill guidance.
@@ -40,7 +40,7 @@ the work scope and take precedence over repository and skill guidance.
 
 ## Work routing
 
-- Latem is a single cross-platform Wails v2 application: a Go backend at the
+- Lotus is a single cross-platform Wails v2 application: a Go backend at the
   repository root with a TypeScript frontend in [`frontend/`](frontend/). Keep
   it building and running on macOS, Windows, and Linux from one codebase, and
   do not add a platform-specific second implementation.
