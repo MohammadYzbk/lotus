@@ -332,3 +332,73 @@ func DirtyFiles(dir string) []string {
 	sort.Strings(files)
 	return files
 }
+
+// --- turning a folder into a repository -------------------------------------
+
+// DefaultBranch is the branch a new repository starts on.
+const DefaultBranch = "main"
+
+// ErrAlreadyRepository means the directory is already under version control.
+var ErrAlreadyRepository = errors.New("vcs: this folder is already a Git repository")
+
+// ErrRemoteExists means the repository already points somewhere.
+var ErrRemoteExists = errors.New("vcs: this repository already has an origin")
+
+// Init turns a plain folder into a repository, on DefaultBranch.
+//
+// The branch is named explicitly rather than left to go-git's default, which
+// is still master: a repository created today should match what GitHub and
+// every current Git install produce, or the first push lands on a branch the
+// remote does not consider its default.
+func Init(dir string) error {
+	if _, err := git.PlainOpen(dir); err == nil {
+		return ErrAlreadyRepository
+	}
+
+	repository, err := git.PlainInit(dir, false)
+	if err != nil {
+		return fmt.Errorf("vcs: init: %w", err)
+	}
+	head := plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName(DefaultBranch))
+	if err := repository.Storer.SetReference(head); err != nil {
+		return fmt.Errorf("vcs: set initial branch: %w", err)
+	}
+	return nil
+}
+
+// SetRemote points origin at a URL, refusing to silently repoint an existing
+// one — that is how work ends up pushed somewhere nobody expected.
+func SetRemote(dir, name, url string) error {
+	repository, err := git.PlainOpen(dir)
+	if err != nil {
+		return fmt.Errorf("vcs: open: %w", err)
+	}
+	if existing, err := repository.Remote(name); err == nil {
+		urls := existing.Config().URLs
+		if len(urls) > 0 && urls[0] != url {
+			return fmt.Errorf("%w: %s", ErrRemoteExists, urls[0])
+		}
+		return nil
+	}
+	if _, err := repository.CreateRemote(&config.RemoteConfig{Name: name, URLs: []string{url}}); err != nil {
+		return fmt.Errorf("vcs: add remote: %w", err)
+	}
+	return nil
+}
+
+// IsRepository reports whether dir is already under version control.
+func IsRepository(dir string) bool {
+	_, err := git.PlainOpen(dir)
+	return err == nil
+}
+
+// HasCommits reports whether the repository has any history yet. A freshly
+// initialised one does not, which is the case Publish has to commit for.
+func HasCommits(dir string) bool {
+	repository, err := git.PlainOpen(dir)
+	if err != nil {
+		return false
+	}
+	_, err = repository.Head()
+	return err == nil
+}
