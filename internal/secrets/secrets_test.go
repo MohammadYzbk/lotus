@@ -14,7 +14,7 @@ func stores(t *testing.T) map[string]Store {
 	t.Helper()
 	keyring.MockInit()
 	return map[string]Store{
-		"keychain": &Keychain{Service: "latem-test", Account: "github"},
+		"keychain": &Keychain{Service: "lotus-test", Account: "github"},
 		"memory":   &Memory{},
 	}
 }

@@ -10,6 +10,7 @@
 package forge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -350,4 +351,117 @@ func orDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// --- pull requests -------------------------------------------------------------
+
+// PullRequest is an opened or existing pull request.
+type PullRequest struct {
+	Number int    `json:"number"`
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	// Existing is true when this was already open rather than just created.
+	Existing bool `json:"existing"`
+}
+
+// RepositoryInfo is what the app needs to know about a repository it did not
+// list: chiefly which branch a pull request should target.
+type RepositoryInfo struct {
+	FullName      string `json:"fullName"`
+	DefaultBranch string `json:"defaultBranch"`
+}
+
+// Repository fetches one repository, for its default branch.
+func (c *Client) Repository(ctx context.Context, token, owner, name string) (RepositoryInfo, error) {
+	var wire struct {
+		FullName      string `json:"full_name"`
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := c.get(ctx, fmt.Sprintf("%s/repos/%s/%s", c.apiBase(), owner, name), token, &wire); err != nil {
+		return RepositoryInfo{}, err
+	}
+	return RepositoryInfo{FullName: wire.FullName, DefaultBranch: wire.DefaultBranch}, nil
+}
+
+// OpenPullRequestFor returns the open pull request for a branch, if there is
+// one.
+//
+// Checked before creating, because pressing the button twice is an ordinary
+// thing to do and GitHub answers the second attempt with a 422 that explains
+// nothing useful. Finding the existing one and handing back its URL is what
+// the writer wanted either way.
+func (c *Client) OpenPullRequestFor(ctx context.Context, token, owner, name, branch string) (PullRequest, bool, error) {
+	query := url.Values{
+		// The head filter is qualified by owner, which is how GitHub scopes it.
+		"head":  {owner + ":" + branch},
+		"state": {"open"},
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/%s/pulls?%s", c.apiBase(), owner, name, query.Encode())
+
+	var wire []struct {
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+		Title   string `json:"title"`
+	}
+	if err := c.get(ctx, endpoint, token, &wire); err != nil {
+		return PullRequest{}, false, err
+	}
+	if len(wire) == 0 {
+		return PullRequest{}, false, nil
+	}
+	return PullRequest{
+		Number:   wire[0].Number,
+		URL:      wire[0].HTMLURL,
+		Title:    wire[0].Title,
+		Existing: true,
+	}, true, nil
+}
+
+// CreatePullRequest opens a pull request from branch into base.
+func (c *Client) CreatePullRequest(ctx context.Context, token, owner, name string, pr PullRequestDraft) (PullRequest, error) {
+	body := map[string]string{
+		"title": pr.Title,
+		"head":  pr.Head,
+		"base":  pr.Base,
+		"body":  pr.Body,
+	}
+	var wire struct {
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+		Title   string `json:"title"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/%s/pulls", c.apiBase(), owner, name)
+	if err := c.postJSON(ctx, endpoint, token, body, &wire); err != nil {
+		return PullRequest{}, err
+	}
+	if wire.HTMLURL == "" {
+		return PullRequest{}, errors.New("forge: GitHub opened no pull request")
+	}
+	return PullRequest{Number: wire.Number, URL: wire.HTMLURL, Title: wire.Title}, nil
+}
+
+// PullRequestDraft is what to open.
+type PullRequestDraft struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	Head  string `json:"head"`
+	Base  string `json:"base"`
+}
+
+func (c *Client) postJSON(ctx context.Context, endpoint, token string, payload, out any) error {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("forge: %w", err)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
+	if err != nil {
+		return fmt.Errorf("forge: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	return c.do(request, out)
 }

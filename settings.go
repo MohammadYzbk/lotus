@@ -24,13 +24,13 @@ type settings struct {
 }
 
 // appDir is the app's own directory under the user's config location
-// (~/Library/Application Support/latem on macOS).
+// (~/Library/Application Support/lotus on macOS).
 func appDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("locate config dir: %w", err)
 	}
-	dir := filepath.Join(base, "latem")
+	dir := filepath.Join(base, "lotus")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create app dir: %w", err)
 	}

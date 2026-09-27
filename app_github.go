@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MohammadYzbk/latem/internal/forge"
-	"github.com/MohammadYzbk/latem/internal/secrets"
-	"github.com/MohammadYzbk/latem/internal/vcs"
+	"github.com/MohammadYzbk/lotus/internal/forge"
+	"github.com/MohammadYzbk/lotus/internal/secrets"
+	"github.com/MohammadYzbk/lotus/internal/vcs"
 )
 
 // githubClientID identifies the registered OAuth app. It is set at build time:
@@ -34,7 +34,7 @@ import (
 // nowhere safe to keep a secret.
 var githubClientID string
 
-const githubClientIDEnv = "LATEM_GITHUB_CLIENT_ID"
+const githubClientIDEnv = "LOTUS_GITHUB_CLIENT_ID"
 
 // deviceFlowTimeout bounds a sign-in attempt. GitHub expires its own codes at
 // around fifteen minutes; this is the app's backstop if it never says so.

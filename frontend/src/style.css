@@ -1014,3 +1014,48 @@ body.resizing *:not(.gutter) {
   user-select: all;
   text-align: center;
 }
+
+/* --- git sheet -------------------------------------------------------------- */
+
+.git-branch {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--accent);
+}
+
+.sheet-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sheet-row .sheet-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sheet-select {
+  font-family: var(--mono);
+  font-size: 12px;
+  /* The native control keeps the platform's own keyboard behaviour, which a
+     custom listbox would have to reimplement badly. */
+  appearance: auto;
+}
+
+.sheet-textarea {
+  resize: vertical;
+  min-height: 3lh;
+  font-family: var(--sans);
+  line-height: 1.45;
+}
+
+/* Commit is unavailable with nothing to commit; saying so beats a button that
+   silently does nothing. */
+.sheet-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sheet-actions .btn:disabled:hover {
+  border-color: var(--border);
+}

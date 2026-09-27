@@ -1,6 +1,6 @@
-# latem
+# lotus
 
-Latem is an offline-first, cross-platform desktop LaTeX editor focused on a
+Lotus is an offline-first, cross-platform desktop LaTeX editor focused on a
 polished writing, compilation, diagnostics, and PDF-preview workflow. It
 orchestrates an external TeX engine rather than implementing one.
 
@@ -68,7 +68,7 @@ npm --prefix frontend test   # frontend unit tests (vitest)
 wails build             # produce a platform binary
 ```
 
-JetBrains users can run the checked-in **Latem (Wails)** configuration in
+JetBrains users can run the checked-in **Lotus (Wails)** configuration in
 [`.run/`](.run/), which is equivalent to `wails dev`.
 
 ### GitHub sign-in
@@ -81,7 +81,7 @@ flow, and pass its client ID at build time:
 wails build -ldflags "-X main.githubClientID=Iv1.your-client-id"
 ```
 
-`LATEM_GITHUB_CLIENT_ID` works too, for trying it without a rebuild. A client ID
+`LOTUS_GITHUB_CLIENT_ID` works too, for trying it without a rebuild. A client ID
 is public, so it is safe to commit in a build script; the device flow exists
 precisely because a desktop app has nowhere to keep a secret.
 

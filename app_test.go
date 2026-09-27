@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohammadYzbk/latem/internal/project"
-	"github.com/MohammadYzbk/latem/internal/tex"
-	"github.com/MohammadYzbk/latem/internal/texlog"
+	"github.com/MohammadYzbk/lotus/internal/project"
+	"github.com/MohammadYzbk/lotus/internal/tex"
+	"github.com/MohammadYzbk/lotus/internal/texlog"
 )
 
 const rootDoc = "\\documentclass{article}\n\\begin{document}\nhello\n\\end{document}\n"

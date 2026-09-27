@@ -13,7 +13,7 @@ import { defineConfig, type Plugin } from 'vite';
 function keepDistDirTracked(): Plugin {
   let outDir = '';
   return {
-    name: 'latem:keep-dist-dir-tracked',
+    name: 'lotus:keep-dist-dir-tracked',
     apply: 'build',
     configResolved(config) {
       outDir = resolve(config.root, config.build.outDir);

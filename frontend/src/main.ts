@@ -17,6 +17,7 @@ import { gestureZoomFactor, wheelZoomFactor } from './zoom';
 import { outline, type OutlineItem } from './latex/outline';
 import { cycleTheme, initTheme, onThemeChange, themePreference } from './theme';
 import { connectGitHub, openGitHubRepository } from './github';
+import { openGitSheet } from './git';
 import {
   Compile,
   ForwardSearch,
@@ -578,7 +579,7 @@ function wirePinchZoom(target: HTMLElement) {
 //
 // The choice is remembered, because the reason to turn the feature off is
 // usually to work without it for a while, not for a single session.
-const SYNC_STORAGE_KEY = 'latem.synctex.enabled';
+const SYNC_STORAGE_KEY = 'lotus.synctex.enabled';
 
 let syncEnabled = readSyncEnabled();
 
@@ -836,6 +837,7 @@ function paletteActions(): PaletteAction[] {
     { id: 'zoom-out', title: 'Zoom out', hint: '⌘−', run: () => preview.zoomOut() },
     { id: 'zoom-fit', title: 'Fit the preview to the pane', hint: '⌘0', run: () => preview.fitWidth() },
     { id: 'zoom-actual', title: 'Preview at actual size', run: () => preview.actualSize() },
+    { id: 'git', title: 'Branch, commit, push…', run: () => openGit() },
     { id: 'github-open', title: 'Open a GitHub repository…', run: () => void openRepository() },
     { id: 'github-connect', title: 'Connect a GitHub account…', run: () => void connectAccount() },
     { id: 'goto-file', title: 'Go to file…', hint: '⌘P', run: () => palette.open('') },
@@ -856,6 +858,10 @@ const palette = mountPalette({
 
 function connectAccount() {
   void connectGitHub(() => void renderGitState());
+}
+
+function openGit() {
+  void openGitSheet(() => void renderGitState());
 }
 
 function openRepository() {
@@ -883,7 +889,7 @@ el('zoom-level').addEventListener('click', () =>
   preview.zoom() === 'fit' ? preview.actualSize() : preview.fitWidth(),
 );
 // The branch badge is the obvious place to look for anything Git-related.
-el('git').addEventListener('click', () => connectAccount());
+el('git').addEventListener('click', () => openGit());
 el('theme').addEventListener('click', () => cycleTheme());
 
 // Shortcuts that must work wherever focus is — the tree, the preview, or the

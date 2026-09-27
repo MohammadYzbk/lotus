@@ -2,6 +2,7 @@ package forge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -223,5 +224,108 @@ func TestRepositoriesStopsOnShortPage(t *testing.T) {
 	}
 	if pages != 1 {
 		t.Errorf("requested %d pages, want 1", pages)
+	}
+}
+
+// --- pull requests -------------------------------------------------------------
+
+func TestRepositoryReadsTheDefaultBranch(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/octocat/paper" {
+			t.Errorf("path: got %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"full_name":"octocat/paper","default_branch":"trunk"}`)
+	})
+
+	info, err := client.Repository(context.Background(), "tok", "octocat", "paper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.DefaultBranch != "trunk" {
+		t.Errorf("default branch: got %q, want trunk", info.DefaultBranch)
+	}
+}
+
+func TestCreatePullRequestSendsTheDraft(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method: got %s", r.Method)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["head"] != "feature/zoom" || body["base"] != "main" {
+			t.Errorf("head/base: got %q -> %q", body["head"], body["base"])
+		}
+		if body["title"] != "Zoom the preview" {
+			t.Errorf("title: got %q", body["title"])
+		}
+		fmt.Fprint(w, `{"number":7,"html_url":"https://github.com/o/r/pull/7","title":"Zoom the preview"}`)
+	})
+
+	pr, err := client.CreatePullRequest(context.Background(), "tok", "o", "r", PullRequestDraft{
+		Title: "Zoom the preview", Body: "why", Head: "feature/zoom", Base: "main",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.Number != 7 || pr.URL != "https://github.com/o/r/pull/7" {
+		t.Errorf("got %+v", pr)
+	}
+	if pr.Existing {
+		t.Error("a freshly created pull request was marked as existing")
+	}
+}
+
+// Pressing the button twice is ordinary. GitHub answers the second attempt with
+// a 422 that explains nothing, so the existing one is found instead.
+func TestOpenPullRequestForFindsAnExistingOne(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("head"); got != "octocat:feature/zoom" {
+			t.Errorf("head filter: got %q, want it qualified by owner", got)
+		}
+		if got := r.URL.Query().Get("state"); got != "open" {
+			t.Errorf("state: got %q", got)
+		}
+		fmt.Fprint(w, `[{"number":7,"html_url":"https://github.com/o/r/pull/7","title":"Already open"}]`)
+	})
+
+	pr, found, err := client.OpenPullRequestFor(context.Background(), "tok", "octocat", "r", "feature/zoom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("an open pull request was not found")
+	}
+	if !pr.Existing {
+		t.Error("the pull request was not marked as existing")
+	}
+	if pr.Number != 7 {
+		t.Errorf("number: got %d", pr.Number)
+	}
+}
+
+func TestOpenPullRequestForReportsNone(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `[]`)
+	})
+
+	_, found, err := client.OpenPullRequestFor(context.Background(), "tok", "o", "r", "feature/zoom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found {
+		t.Error("an empty list was read as a pull request")
+	}
+}
+
+// A 200 with no URL would otherwise be reported as success with nothing to open.
+func TestCreatePullRequestRejectsAReplyWithNoURL(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"number":7}`)
+	})
+	if _, err := client.CreatePullRequest(context.Background(), "tok", "o", "r", PullRequestDraft{}); err == nil {
+		t.Error("a reply with no URL was accepted")
 	}
 }

@@ -35,7 +35,7 @@ type Keychain struct {
 
 // NewKeychain returns the store the app uses for a GitHub token.
 func NewKeychain() *Keychain {
-	return &Keychain{Service: "latem", Account: "github"}
+	return &Keychain{Service: "lotus", Account: "github"}
 }
 
 func (k *Keychain) Get() (string, error) {

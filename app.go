@@ -16,10 +16,10 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/MohammadYzbk/latem/internal/project"
-	"github.com/MohammadYzbk/latem/internal/synctex"
-	"github.com/MohammadYzbk/latem/internal/tex"
-	"github.com/MohammadYzbk/latem/internal/texlog"
+	"github.com/MohammadYzbk/lotus/internal/project"
+	"github.com/MohammadYzbk/lotus/internal/synctex"
+	"github.com/MohammadYzbk/lotus/internal/tex"
+	"github.com/MohammadYzbk/lotus/internal/texlog"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
@@ -381,7 +381,7 @@ func migrateLegacyScratch(dest string) bool {
 	if err != nil {
 		return false
 	}
-	old := filepath.Join(cache, "latem", "scratch", "main.tex")
+	old := filepath.Join(cache, "lotus", "scratch", "main.tex")
 	data, err := os.ReadFile(old)
 	if err != nil {
 		return false
@@ -405,7 +405,7 @@ func buildDir(projectRoot string) (string, error) {
 		return "", fmt.Errorf("locate cache dir: %w", err)
 	}
 	sum := sha256.Sum256([]byte(projectRoot))
-	dir := filepath.Join(base, "latem", "build", hex.EncodeToString(sum[:8]))
+	dir := filepath.Join(base, "lotus", "build", hex.EncodeToString(sum[:8]))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create build dir: %w", err)
 	}
@@ -844,7 +844,7 @@ func (a *App) Compile() CompileResult {
 
 // compileLocked runs the engine on the root document. Callers must hold mu.
 func (a *App) compileLocked() CompileResult {
-	// The project may have changed outside Latem since the last result. Rebuild
+	// The project may have changed outside Lotus since the last result. Rebuild
 	// source membership only after this compile so cached exact spellings cannot
 	// survive a case-only rename on a case-insensitive filesystem.
 	a.invalidateDiagnosticManifestLocked()

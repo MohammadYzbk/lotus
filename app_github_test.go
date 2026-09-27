@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MohammadYzbk/latem/internal/forge"
-	"github.com/MohammadYzbk/latem/internal/secrets"
+	"github.com/MohammadYzbk/lotus/internal/forge"
+	"github.com/MohammadYzbk/lotus/internal/secrets"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
