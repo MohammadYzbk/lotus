@@ -367,3 +367,89 @@ func TestPushPublishesOnlyTheNamedBranch(t *testing.T) {
 		t.Error("pushing one branch published another")
 	}
 }
+
+// --- turning a folder into a repository -------------------------------------
+
+func TestInitMakesARepositoryOnMain(t *testing.T) {
+	dir := t.TempDir()
+	if IsRepository(dir) {
+		t.Fatal("a plain folder was reported as a repository")
+	}
+
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if !IsRepository(dir) {
+		t.Error("the folder is still not a repository")
+	}
+	// Nothing committed yet: this is the state Publish has to commit for.
+	if HasCommits(dir) {
+		t.Error("a fresh repository claimed to have commits")
+	}
+
+	// The branch has to be main, not go-git's still-default master, or the
+	// first push lands somewhere the remote does not treat as its default.
+	write(t, dir, "main.tex", "\\documentclass{article}\n")
+	if _, err := Commit(dir, "initial", testWho); err != nil {
+		t.Fatal(err)
+	}
+	branches, err := ListBranches(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branches.Current != DefaultBranch {
+		t.Errorf("initial branch: got %q, want %q", branches.Current, DefaultBranch)
+	}
+}
+
+func TestInitRefusesAnExistingRepository(t *testing.T) {
+	dir := workingCopy(t)
+	if err := Init(dir); !errors.Is(err, ErrAlreadyRepository) {
+		t.Errorf("got %v, want ErrAlreadyRepository", err)
+	}
+}
+
+func TestSetRemoteAttachesOrigin(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	const url = "https://github.com/octocat/paper.git"
+	if err := SetRemote(dir, "origin", url); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "main.tex", "\\documentclass{article}\n")
+	if _, err := Commit(dir, "initial", testWho); err != nil {
+		t.Fatal(err)
+	}
+	if got := Status(dir).Remote; got != url {
+		t.Errorf("remote: got %q, want %q", got, url)
+	}
+
+	// Setting the same URL again is a no-op, not an error: publishing twice
+	// after a failed push must not be blocked by its own earlier progress.
+	if err := SetRemote(dir, "origin", url); err != nil {
+		t.Errorf("re-setting the same remote failed: %v", err)
+	}
+}
+
+// Silently repointing an origin is how work ends up pushed somewhere nobody
+// expected.
+func TestSetRemoteRefusesToRepoint(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetRemote(dir, "origin", "https://github.com/octocat/one.git"); err != nil {
+		t.Fatal(err)
+	}
+
+	err := SetRemote(dir, "origin", "https://github.com/octocat/two.git")
+	if !errors.Is(err, ErrRemoteExists) {
+		t.Fatalf("got %v, want ErrRemoteExists", err)
+	}
+	if got := Status(dir).Remote; got != "https://github.com/octocat/one.git" {
+		t.Errorf("the remote was changed anyway: %q", got)
+	}
+}

@@ -16,6 +16,8 @@ import {
   PushBranch,
   RebaseOnRemote,
   RepositoryBranches,
+  PublishStatus,
+  PublishToGitHub,
   RepositoryState,
   SwitchBranch,
   SyncStatus,
@@ -81,21 +83,110 @@ function escape(text: string): string {
  * `onChanged` fires after anything that moves the working copy, so the branch
  * badge in the header stays honest without the sheet knowing about it.
  */
-export async function openGitSheet(onChanged: () => void) {
-  const state = await RepositoryState();
-  if (!state.repository) {
-    const { panel, close } = sheet('Git');
+/**
+ * The sheet for a project that is not connected to anything yet.
+ *
+ * Offered in place of the Git panel rather than alongside it: a plain folder
+ * has no branch to show and no history to act on, so the only useful thing to
+ * put in front of the writer is the step that changes that.
+ */
+export async function publishSheet(onChanged: () => void) {
+  const { panel, close } = sheet('Publish to GitHub');
+  const status = await PublishStatus();
+
+  if (!status.publishable) {
     panel.append(
       element(`
         <div class="sheet-body">
-          <h2 class="sheet-title">Not a repository</h2>
-          <p class="sheet-text">This project is a plain folder. Open a GitHub repository to work with branches and commits.</p>
+          <h2 class="sheet-title">Nothing to publish</h2>
+          <p class="sheet-text">${escape(status.reason || 'This project cannot be published.')}</p>
         </div>
       `),
     );
-    const actions = element<HTMLDivElement>('<div class="sheet-actions"></div>');
-    actions.append(button('Close', 'btn', close));
-    panel.append(actions);
+    const done = element<HTMLDivElement>('<div class="sheet-actions"></div>');
+    done.append(button('Close', 'btn', close));
+    panel.append(done);
+    return;
+  }
+
+  const body = element<HTMLDivElement>(`
+    <div class="sheet-body">
+      <h2 class="sheet-title">Publish to GitHub</h2>
+      <p class="sheet-text">Creates a repository, connects this folder to it, and pushes your work.
+         From then on you can commit, push, pull, and open pull requests from here.</p>
+      <div class="sheet-field">
+        <label class="sheet-label" for="repo-name">Repository name</label>
+        <input class="sheet-input" id="repo-name" spellcheck="false" autocomplete="off" />
+      </div>
+      <div class="sheet-field">
+        <label class="sheet-label" for="repo-description">Description <span class="sheet-optional">optional</span></label>
+        <input class="sheet-input" id="repo-description" autocomplete="off" />
+      </div>
+      <label class="sheet-check">
+        <input type="checkbox" id="repo-private" checked />
+        <span>Private \u2014 only you and people you invite can see it</span>
+      </label>
+    </div>
+  `);
+  panel.append(body);
+
+  const name = body.querySelector<HTMLInputElement>('#repo-name')!;
+  const description = body.querySelector<HTMLInputElement>('#repo-description')!;
+  const isPrivate = body.querySelector<HTMLInputElement>('#repo-private')!;
+  name.value = status.suggestedName;
+
+  const setEnabled = (on: boolean) => {
+    panel.querySelectorAll('button, input').forEach((control) => {
+      (control as HTMLInputElement).disabled = !on;
+    });
+  };
+
+  const publish = async () => {
+    setEnabled(false);
+    const pending = element(`<p class="sheet-note info">Creating ${escape(name.value)} and pushing\u2026</p>`);
+    body.append(pending);
+
+    const result = await PublishToGitHub({
+      name: name.value,
+      description: description.value,
+      private: isPrivate.checked,
+    } as main.PublishDraft);
+    pending.remove();
+    onChanged();
+
+    if (result.error) {
+      setEnabled(true);
+      // A created-but-unpushed repository is real state; saying so is what
+      // lets the writer retry the push rather than publishing a second time.
+      body.append(element(`<p class="sheet-note bad">${escape(result.error)}</p>`));
+      return;
+    }
+
+    close();
+    // A repository is read and managed on github.com, so that is where to land
+    // once it exists.
+    if (result.repository?.cloneUrl) {
+      BrowserOpenURL(result.repository.cloneUrl.replace(/\.git$/, ''));
+    }
+  };
+
+  name.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    void publish();
+  });
+
+  const actions = element<HTMLDivElement>('<div class="sheet-actions"></div>');
+  actions.append(button('Cancel', 'btn btn-quiet', close), button('Publish', 'btn', () => void publish()));
+  panel.append(actions);
+  name.focus();
+  name.select();
+}
+
+export async function openGitSheet(onChanged: () => void) {
+  const state = await RepositoryState();
+  if (!state.repository || !state.remote) {
+    await publishSheet(onChanged);
     return;
   }
 

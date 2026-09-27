@@ -329,3 +329,65 @@ func TestCreatePullRequestRejectsAReplyWithNoURL(t *testing.T) {
 		t.Error("a reply with no URL was accepted")
 	}
 }
+
+func TestCreateRepositoryAsksForAnEmptyOne(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/repos" || r.Method != http.MethodPost {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		// auto_init would give the repository a commit, and the first push
+		// from a project with its own history would then be rejected.
+		if body["auto_init"] != false {
+			t.Errorf("auto_init: got %v, want false", body["auto_init"])
+		}
+		if body["private"] != true {
+			t.Errorf("private: got %v", body["private"])
+		}
+		fmt.Fprint(w, `{"full_name":"octocat/paper","clone_url":"https://github.com/octocat/paper.git","default_branch":"main"}`)
+	})
+
+	repository, err := client.CreateRepository(context.Background(), "tok", NewRepository{
+		Name: "paper", Description: "a paper", Private: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repository.CloneURL != "https://github.com/octocat/paper.git" {
+		t.Errorf("clone URL: got %q", repository.CloneURL)
+	}
+}
+
+// The name is the one thing the writer can change, so the duplicate case is
+// recognised rather than surfaced as a bare 422.
+func TestCreateRepositoryRecognisesATakenName(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		fmt.Fprint(w, `{"message":"Repository creation failed.","errors":[{"message":"name already exists on this account"}]}`)
+	})
+
+	_, err := client.CreateRepository(context.Background(), "tok", NewRepository{Name: "paper"})
+	if !errors.Is(err, ErrNameTaken) {
+		t.Errorf("got %v, want ErrNameTaken", err)
+	}
+}
+
+// GitHub's top-level message for a validation failure is generic; the useful
+// part is nested, and dropping it leaves the writer with nothing to act on.
+func TestValidationDetailIsSurfaced(t *testing.T) {
+	client := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		fmt.Fprint(w, `{"message":"Validation Failed","errors":[{"field":"name","code":"invalid"}]}`)
+	})
+
+	_, err := client.CreateRepository(context.Background(), "tok", NewRepository{Name: "x"})
+	if err == nil {
+		t.Fatal("a 422 was treated as success")
+	}
+	if !strings.Contains(err.Error(), "name invalid") {
+		t.Errorf("the nested detail was dropped: %v", err)
+	}
+}

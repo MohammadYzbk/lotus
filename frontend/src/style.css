@@ -1078,3 +1078,34 @@ body.resizing *:not(.gutter) {
 .sheet-note + .sheet-row {
   margin-top: 8px;
 }
+
+/* --- publish sheet ---------------------------------------------------------- */
+
+.sheet-optional {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-faint);
+  font-weight: 400;
+}
+
+/* Private is the default and the safer answer, so the control reads as a
+   statement of what will happen rather than as a bare checkbox. */
+.sheet-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.sheet-check input {
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.sheet-check:hover {
+  color: var(--fg);
+}

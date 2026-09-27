@@ -17,7 +17,7 @@ import { gestureZoomFactor, wheelZoomFactor } from './zoom';
 import { outline, type OutlineItem } from './latex/outline';
 import { cycleTheme, initTheme, onThemeChange, themePreference } from './theme';
 import { connectGitHub, openGitHubRepository } from './github';
-import { openGitSheet } from './git';
+import { openGitSheet, publishSheet } from './git';
 import {
   Compile,
   ForwardSearch,
@@ -838,6 +838,7 @@ function paletteActions(): PaletteAction[] {
     { id: 'zoom-fit', title: 'Fit the preview to the pane', hint: '⌘0', run: () => preview.fitWidth() },
     { id: 'zoom-actual', title: 'Preview at actual size', run: () => preview.actualSize() },
     { id: 'git', title: 'Branch, commit, push…', run: () => openGit() },
+    { id: 'github-publish', title: 'Publish this project to GitHub…', run: () => void publishSheet(() => void renderGitState()) },
     { id: 'github-open', title: 'Open a GitHub repository…', run: () => void openRepository() },
     { id: 'github-connect', title: 'Connect a GitHub account…', run: () => void connectAccount() },
     { id: 'goto-file', title: 'Go to file…', hint: '⌘P', run: () => palette.open('') },

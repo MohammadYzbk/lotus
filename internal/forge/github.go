@@ -327,15 +327,37 @@ func describe(code, description string) string {
 	return code
 }
 
-// firstLine keeps an error message to one line; GitHub error bodies are JSON
-// and a raw dump helps nobody.
+// firstLine keeps an error message to one line.
+//
+// GitHub's error bodies are JSON, and for a validation failure the top-level
+// message is generic — "Repository creation failed." — while the part the
+// writer can act on sits in a nested array. Pulling that up is the difference
+// between "it failed" and "that name is taken".
 func firstLine(data []byte) string {
 	var body struct {
 		Message string `json:"message"`
+		Errors  []struct {
+			Message string `json:"message"`
+			Field   string `json:"field"`
+			Code    string `json:"code"`
+		} `json:"errors"`
 	}
 	if err := json.Unmarshal(data, &body); err == nil && body.Message != "" {
+		var details []string
+		for _, entry := range body.Errors {
+			switch {
+			case entry.Message != "":
+				details = append(details, entry.Message)
+			case entry.Field != "" && entry.Code != "":
+				details = append(details, entry.Field+" "+entry.Code)
+			}
+		}
+		if len(details) > 0 {
+			return body.Message + " " + strings.Join(details, "; ")
+		}
 		return body.Message
 	}
+
 	text := strings.TrimSpace(string(data))
 	if index := strings.IndexByte(text, '\n'); index >= 0 {
 		text = text[:index]
@@ -464,4 +486,47 @@ func (c *Client) postJSON(ctx context.Context, endpoint, token string, payload, 
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
 	return c.do(request, out)
+}
+
+// --- creating a repository ------------------------------------------------------
+
+// NewRepository is the repository to create.
+type NewRepository struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Private defaults to true at the call site: a draft paper is not something
+	// to publish to the world by accident.
+	Private bool `json:"private"`
+}
+
+// ErrNameTaken means the account already has a repository with that name.
+var ErrNameTaken = errors.New("forge: that repository name is already taken")
+
+// CreateRepository makes an empty repository on the signed-in account.
+//
+// Deliberately empty: `auto_init` would give it a README commit, and the first
+// push from a project that already has its own history would then be rejected
+// as non-fast-forward — for a reason the writer could do nothing about.
+func (c *Client) CreateRepository(ctx context.Context, token string, spec NewRepository) (Repository, error) {
+	body := map[string]any{
+		"name":        spec.Name,
+		"description": spec.Description,
+		"private":     spec.Private,
+		"auto_init":   false,
+	}
+
+	var wire repositoryWire
+	err := c.postJSON(ctx, c.apiBase()+"/user/repos", token, body, &wire)
+	if err != nil {
+		// GitHub answers a duplicate with a 422 whose message is buried in a
+		// validation array; the name is the one thing the writer can change.
+		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			return Repository{}, fmt.Errorf("%w: %s", ErrNameTaken, spec.Name)
+		}
+		return Repository{}, err
+	}
+	if wire.CloneURL == "" {
+		return Repository{}, errors.New("forge: GitHub created no repository")
+	}
+	return wire.repository(), nil
 }
