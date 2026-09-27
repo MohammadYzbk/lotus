@@ -6,16 +6,32 @@
 // app has one dialog language.
 
 import {
+  AbortRebase,
   CommitChanges,
+  ContinueRebase,
   CreateBranch,
+  FetchRemote,
   OpenPullRequest,
+  PullChanges,
   PushBranch,
+  RebaseOnRemote,
   RepositoryBranches,
   RepositoryState,
   SwitchBranch,
+  SyncStatus,
 } from '../wailsjs/go/main/App';
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime';
 import type { main, vcs } from '../wailsjs/go/models';
+
+/** The one-line summary of where the branch stands against origin. */
+function describeSync(sync: vcs.Sync): string {
+  if (sync.rebasing) return 'Rebase in progress';
+  if (!sync.tracking) return 'Not on origin yet';
+  if (sync.diverged) return `Diverged — ${sync.ahead} local, ${sync.behind} remote`;
+  if (sync.behind > 0) return `${sync.behind} commit${sync.behind === 1 ? '' : 's'} to pull`;
+  if (sync.ahead > 0) return `${sync.ahead} commit${sync.ahead === 1 ? '' : 's'} to push`;
+  return 'Up to date with origin';
+}
 
 /** Opens a modal and returns a handle for closing it. */
 function sheet(label: string): { panel: HTMLDivElement; close: () => void } {
@@ -87,9 +103,13 @@ export async function openGitSheet(onChanged: () => void) {
 
   /** Re-reads everything and redraws, after any operation. */
   const refresh = async (note?: { text: string; bad?: boolean }) => {
-    const [current, branches] = await Promise.all([RepositoryState(), RepositoryBranches()]);
+    const [current, branches, sync] = await Promise.all([
+      RepositoryState(),
+      RepositoryBranches(),
+      SyncStatus(),
+    ]);
     onChanged();
-    draw(current, branches, note);
+    draw(current, branches, sync.sync, note);
   };
 
   const run = async (action: Promise<main.GitResult>) => {
@@ -99,7 +119,20 @@ export async function openGitSheet(onChanged: () => void) {
     );
   };
 
-  function draw(current: vcs.State, branches: main.BranchList, note?: { text: string; bad?: boolean }) {
+  /** Same, for the calls that report sync state instead. */
+  const runSync = async (action: Promise<main.SyncResult>) => {
+    const result = await action;
+    await refresh(
+      result.error ? { text: result.error, bad: true } : { text: result.detail || 'Done' },
+    );
+  };
+
+  function draw(
+    current: vcs.State,
+    branches: main.BranchList,
+    sync: vcs.Sync,
+    note?: { text: string; bad?: boolean },
+  ) {
     panel.replaceChildren();
 
     const where = current.branch || (current.unborn ? 'no commits yet' : 'detached');
@@ -112,6 +145,32 @@ export async function openGitSheet(onChanged: () => void) {
       </div>
     `);
     panel.append(body);
+
+    body.append(element(`<p class="sheet-sync">${escape(describeSync(sync))}</p>`));
+
+    // A stopped rebase is the only state that blocks everything else, so it
+    // gets the loudest treatment and its own pair of actions.
+    if (sync.rebasing) {
+      const stalled = element<HTMLDivElement>(`
+        <div class="sheet-note bad">
+          <strong>A rebase stopped on conflicts.</strong>
+          ${
+            sync.conflicted?.length
+              ? `Open ${sync.conflicted.map((f) => `<code>${escape(f)}</code>`).join(', ')},
+                 remove the &lt;&lt;&lt;&lt;&lt;&lt;&lt; markers, then continue.`
+              : 'Resolve the conflicts, then continue.'
+          }
+        </div>
+      `);
+      body.append(stalled);
+
+      const rebaseActions = element<HTMLDivElement>('<div class="sheet-row"></div>');
+      rebaseActions.append(
+        button('Abort', 'btn btn-quiet', () => void runSync(AbortRebase())),
+        button('Continue', 'btn', () => void runSync(ContinueRebase())),
+      );
+      body.append(rebaseActions);
+    }
 
     if (note) body.append(element(`<p class="sheet-note ${note.bad ? 'bad' : 'info'}">${escape(note.text)}</p>`));
 
@@ -182,6 +241,22 @@ export async function openGitSheet(onChanged: () => void) {
 
     const push = button('Push', 'btn', () => void run(PushBranch()));
 
+    const fetch = button('Fetch', 'btn btn-quiet', () => void runSync(FetchRemote()));
+    fetch.title = 'Check origin for new commits — changes nothing locally';
+
+    // Pull only appears when there is something to pull; rebase only when a
+    // fast-forward is impossible. Offering both always would mean one of them
+    // is usually the wrong thing to press.
+    const catchUp = sync.diverged
+      ? button('Rebase onto origin', 'btn', () => void runSync(RebaseOnRemote()))
+      : button('Pull', 'btn', () => void runSync(PullChanges()));
+    catchUp.disabled = sync.rebasing || (!sync.diverged && sync.behind === 0);
+    catchUp.title = sync.diverged
+      ? 'Replay your commits on top of origin'
+      : sync.behind > 0
+        ? `Fast-forward ${sync.behind} commit${sync.behind === 1 ? '' : 's'}`
+        : 'Nothing to pull';
+
     const pull = button('Pull request…', 'btn', () => {
       void (async () => {
         const result = await OpenPullRequest(message.value.split('\n')[0], message.value);
@@ -196,12 +271,16 @@ export async function openGitSheet(onChanged: () => void) {
     });
     pull.title = 'Open a pull request for this branch on GitHub';
 
-    actions.append(commit, push, pull);
+    // Disabled rather than hidden while a rebase is stalled: the buttons stay
+    // where they were, and the reason is stated above them.
+    for (const control of [commit, push, pull]) control.disabled ||= sync.rebasing;
+
+    actions.append(fetch, catchUp, commit, push, pull);
     panel.append(actions);
 
     if (current.dirty) message.focus();
   }
 
-  const branches = await RepositoryBranches();
-  draw(state, branches);
+  const [branches, initial] = await Promise.all([RepositoryBranches(), SyncStatus()]);
+  draw(state, branches, initial.sync);
 }
