@@ -18,6 +18,7 @@ import { outline, type OutlineItem } from './latex/outline';
 import { cycleTheme, initTheme, onThemeChange, themePreference } from './theme';
 import { connectGitHub, openGitHubRepository } from './github';
 import { openGitSheet, publishSheet } from './git';
+import { applyColors, openSettings } from './settings';
 import {
   Compile,
   ForwardSearch,
@@ -852,6 +853,7 @@ function paletteActions(): PaletteAction[] {
     { id: 'problems', title: 'Show problems', run: () => { pinnedView = 'problems'; showView('problems', true); } },
     { id: 'log', title: 'Show raw log', run: () => { pinnedView = 'log'; showView('log', true); } },
     { id: 'theme', title: 'Switch theme (system, light, dark)', run: () => cycleTheme() },
+    { id: 'settings', title: 'Customise colours…', hint: '⌘,', run: () => openSettings() },
     { id: 'fullscreen', title: 'Toggle full screen', hint: '⌃⌘F', run: () => void ToggleFullscreen() },
     {
       id: 'synctex',
@@ -975,6 +977,12 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
+  if (key === ',') {
+    event.preventDefault();
+    openSettings();
+    return;
+  }
+
   switch (key) {
     case 's':
       event.preventDefault();
@@ -1015,6 +1023,7 @@ async function init() {
   mountPanes(document.querySelector<HTMLElement>('.panes')!);
   wirePinchZoom(pdfEl);
   initTheme();
+  applyColors();
   renderThemeButton();
   setPreviewFocus(false);
   renderSyncState();
