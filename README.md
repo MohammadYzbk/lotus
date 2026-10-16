@@ -30,6 +30,8 @@ a single codebase.
 - Fetches, reports how far a branch has drifted from its remote, and pulls by
   fast-forward or rebase, surfacing conflicts for resolution in the editor.
 - Publishes a folder that was never under version control as a new repository.
+- Ships with its own TeX engine, and offers to fetch one when a build has none,
+  so a fresh install compiles without a terminal.
 
 Against the phased build plan in
 [`docs/project-plan.md`](docs/project-plan.md), Phases 0-8 are in place:
@@ -37,12 +39,31 @@ foundations, the vertical slice, the live-ish compile loop, projects as folders,
 bidirectional SyncTeX, editor UX polish, connecting to GitHub, the branch and
 pull-request workflow, and sync robustness. Publishing a plain folder as a new
 repository is there too, which the plan never listed. Phase 9, packaging and
-distribution, is not started. The OAuth device flow and pull-request creation
-are covered by tests against a stubbed server but have never run against real
-GitHub; [`docs/architecture.md`](docs/architecture.md) lists that and the other
-known gaps.
+distribution, is largely built — a bundled engine, the first-run screen, an
+update check, and release workflows for all three platforms — but unproven:
+nothing has run in CI, nothing has been signed, and only macOS on Apple silicon
+has been built end to end. The OAuth device flow and pull-request creation are
+covered by tests against a stubbed server but have never run against real
+GitHub. [`docs/packaging.md`](docs/packaging.md) and
+[`docs/architecture.md`](docs/architecture.md) list those gaps and the rest.
 
 Collaboration, plugins, AI, and telemetry remain out of scope.
+
+## Installing
+
+Download the build for your platform from the
+[releases page](https://github.com/MohammadYzbk/lotus/releases), open it, and
+start writing. The TeX engine is inside: nothing else to install, and no
+terminal.
+
+Releases are not signed yet, so the first launch needs a nudge — on macOS,
+right-click the app and choose **Open**; on Windows, **More info → Run anyway**.
+Both warnings are expected, and [`docs/packaging.md`](docs/packaging.md)
+explains what would remove them.
+
+Building from source instead? See [Development](#development). A build made
+that way has no engine inside it, and offers to fetch one the first time it
+opens.
 
 ## Shortcuts
 
@@ -98,6 +119,8 @@ reopening, and the command list shows each command's own key beside it.
 
 ```text
 main.go, app.go           Wails entrypoint and the bound app API
+app_engine.go             Finding a TeX engine, and installing one
+app_update.go             The version, and whether a newer one exists
 app_github.go             Sign-in, the account, the repository list
 app_git.go                Branch, commit, push, pull request
 app_sync.go               Fetch, divergence, pull, rebase, conflicts
@@ -113,6 +136,9 @@ internal/
   forge/                  GitHub sign-in, repositories, pull requests
   vcs/                    Working-copy state and Git operations, over go-git
   secrets/                The GitHub token, in the OS keychain
+  engine/                 Locating, downloading and unpacking Tectonic
+  update/                 Asking GitHub whether there is a newer Lotus
+build/cmd/bundle-engine/  Puts the engine inside a built application
 frontend/                 Vite + TypeScript UI (CodeMirror editor, pdf.js preview)
   src/latex/              LaTeX vocabulary, completion sources, outline parsing
   src/palette.ts          Command palette (commands, files, headings, go-to-line)
@@ -120,7 +146,10 @@ frontend/                 Vite + TypeScript UI (CodeMirror editor, pdf.js previe
   src/settings.ts         The adjustable colours, per theme
   src/preview.ts          pdf.js rendering, zoom, the SyncTeX highlight
   src/git.ts, github.ts   The Git and GitHub sheets
+  src/engine.ts           The first-run engine screen
+  src/about.ts            Version and the update check
 build/                    Wails packaging inputs for darwin and windows
+.github/workflows/        Checks on every push, and the release build
 ```
 
 ## Development
@@ -134,7 +163,13 @@ wails dev               # run with live reload
 go test ./...           # Go tests
 npm --prefix frontend test   # frontend unit tests (vitest)
 wails build             # produce a platform binary
+
+# Put the TeX engine inside that build, which the release workflow also does.
+go run ./build/cmd/bundle-engine -app build/bin/lotus.app -platform darwin/arm64
 ```
+
+[`docs/packaging.md`](docs/packaging.md) covers releases: what ships, how the
+engine is pinned, and what signing needs.
 
 JetBrains users can run the checked-in **Lotus (Wails)** configuration in
 [`.run/`](.run/), which is equivalent to `wails dev`.
@@ -169,6 +204,8 @@ disk.
   format.
 - [`docs/architecture.md`](docs/architecture.md) for how the application
   actually runs: startup, the compile loop, and how each subsystem hangs off it.
+- [`docs/packaging.md`](docs/packaging.md) for how a release is built, what the
+  engine pin means, and what is and is not signed.
 - [`docs/project-plan.md`](docs/project-plan.md) for the vision, architecture,
   stack decisions, and the phased build plan.
 - [`CONTEXT.md`](CONTEXT.md) for product vocabulary.

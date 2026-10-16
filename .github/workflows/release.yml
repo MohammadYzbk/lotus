@@ -1,0 +1,219 @@
+name: Release
+
+# Builds an installable Lotus for each platform, with the TeX engine inside it.
+#
+# Signing is conditional. Every signing step is skipped when its secrets are
+# absent, so this workflow produces working — if unsigned — artifacts in a fork
+# or before certificates exist, rather than failing. An unsigned build is
+# marked as such in the release notes: macOS Gatekeeper and Windows SmartScreen
+# will both warn about one, and a writer should know that is expected rather
+# than a sign something is wrong.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (e.g. 0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One platform's failure should not destroy the other three artifacts;
+      # a partial release is still worth inspecting.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple silicon)
+            runner: macos-14
+            platform: darwin/arm64
+            artifact: lotus-macos-arm64
+          - name: macOS (Intel)
+            runner: macos-13
+            platform: darwin/amd64
+            artifact: lotus-macos-amd64
+          - name: Windows
+            runner: windows-latest
+            platform: windows/amd64
+            artifact: lotus-windows-amd64
+          - name: Linux
+            runner: ubuntu-22.04
+            platform: linux/amd64
+            artifact: lotus-linux-amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Work out the version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building $version"
+
+      - name: Install the Linux WebView dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: choco install nsis -y
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+
+      # The version is stamped in here and nowhere else, so the About box and
+      # the update check always agree with the tag that produced the build.
+      - name: Build
+        shell: bash
+        run: wails build -platform ${{ matrix.platform }} -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+
+      # Before signing: a signature has to cover the engine, and a file added
+      # to a signed bundle afterwards invalidates it.
+      - name: Bundle the TeX engine
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            go run ./build/cmd/bundle-engine -app build/bin/lotus.app -platform ${{ matrix.platform }}
+          else
+            go run ./build/cmd/bundle-engine -app build/bin -platform ${{ matrix.platform }}
+          fi
+
+      # --- macOS signing and notarisation ------------------------------------
+
+      - name: Sign the macOS app
+        if: runner.os == 'macOS' && env.CERTIFICATE != ''
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          # A keychain of this job's own, so nothing touches the runner's login
+          # keychain and the private key dies with the runner.
+          keychain="$RUNNER_TEMP/build.keychain"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychain -d user -s "$keychain"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          # The nested engine is signed first: codesign seals inner code into
+          # the outer signature, so the order is inside out.
+          codesign --force --options runtime --timestamp \
+            --sign "$IDENTITY" build/bin/lotus.app/Contents/Resources/engine/tectonic
+          codesign --force --options runtime --timestamp \
+            --sign "$IDENTITY" build/bin/lotus.app
+          codesign --verify --deep --strict --verbose=2 build/bin/lotus.app
+
+      - name: Notarise the macOS app
+        if: runner.os == 'macOS' && env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent build/bin/lotus.app "$RUNNER_TEMP/lotus.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/lotus.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          # Stapling puts the notarisation ticket inside the app, so Gatekeeper
+          # accepts it on a machine that is offline at first launch.
+          xcrun stapler staple build/bin/lotus.app
+
+      - name: Package the macOS app
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          hdiutil create -volname Lotus -srcfolder build/bin/lotus.app \
+            -ov -format UDZO "build/bin/${{ matrix.artifact }}.dmg"
+
+      # --- Windows -----------------------------------------------------------
+
+      - name: Sign the Windows executable
+        if: runner.os == 'Windows' && env.CERTIFICATE != ''
+        shell: pwsh
+        env:
+          CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfx = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERTIFICATE))
+          # The engine ships inside the installer, so it is signed too.
+          foreach ($target in @("build\bin\lotus.exe", "build\bin\engine\tectonic.exe")) {
+            & signtool sign /f $pfx /p $env:CERTIFICATE_PASSWORD /fd SHA256 `
+              /tr http://timestamp.digicert.com /td SHA256 $target
+          }
+          Remove-Item $pfx
+
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: wails build -platform ${{ matrix.platform }} -nsis -skipbindings -s -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+
+      # --- Linux -------------------------------------------------------------
+
+      - name: Package the Linux build
+        if: runner.os == 'Linux'
+        run: tar -czf "build/bin/${{ matrix.artifact }}.tar.gz" -C build/bin lotus engine
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            build/bin/*.dmg
+            build/bin/*.tar.gz
+            build/bin/*installer*.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only a tag publishes. A manual run builds and leaves the artifacts on the
+    # run, so a release can be rehearsed without creating one.
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          draft: true
+          generate_release_notes: true

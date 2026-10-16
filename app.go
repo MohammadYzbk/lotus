@@ -292,6 +292,14 @@ type App struct {
 	// network call must not hold up a compile.
 	github *githubState
 
+	// engine guards installing a TeX engine, which takes minutes and must not
+	// be started twice. Its own lock, for the same reason as github's.
+	engine engineState
+
+	// engineDir overrides where a managed engine is kept. Injectable so a test
+	// never searches, or installs into, the real application-support directory.
+	engineDir string
+
 	// diagnosticReadText is a test seam for verifying that source-backed
 	// diagnostic resolution reuses already admitted editor text.
 	diagnosticReadText      func(relative string) (string, error)
@@ -316,6 +324,11 @@ func (a *App) startup(ctx context.Context) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Before anything else: an engine, or the knowledge that there is none.
+	// The first-run screen asks for this straight away, and a compile may be
+	// triggered by the project restore just below.
+	a.resolveEngineLocked()
 
 	if a.settingsFile == "" {
 		if dir, err := appDir(); err == nil {

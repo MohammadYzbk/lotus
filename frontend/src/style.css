@@ -255,12 +255,6 @@ body {
   background: var(--border);
 }
 
-.engine {
-  color: var(--fg-dim);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
 .empty {
   margin: auto;
   color: var(--fg-dim);
@@ -1204,4 +1198,59 @@ body.resizing *:not(.gutter) {
 .color-reset:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* --- the engine readout and its sheet ---------------------------------------
+ *
+ * The status bar's engine line is a button now: with no engine there has to be
+ * somewhere to click, and the same place should answer "which one is it using"
+ * when there is one. */
+
+button.engine {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.engine:hover {
+  color: var(--fg);
+}
+
+/* Missing is not an ordinary status: nothing compiles until it is resolved. */
+button.engine.engine-missing {
+  color: var(--bad);
+}
+
+.engine-path {
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.engine-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.engine-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.engine-bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  /* Eased, because progress arrives in bursts and an unsmoothed bar reads as
+     a stutter rather than as a download. */
+  transition: width 120ms linear;
 }
