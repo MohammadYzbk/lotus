@@ -19,6 +19,8 @@ import { cycleTheme, initTheme, onThemeChange, themePreference } from './theme';
 import { connectGitHub, openGitHubRepository } from './github';
 import { openGitSheet, publishSheet } from './git';
 import { applyColors, openSettings } from './settings';
+import { engineLabel, onEngineChange, openEngineSheet, refreshEngine } from './engine';
+import { openAboutSheet } from './about';
 import {
   Compile,
   ForwardSearch,
@@ -27,7 +29,6 @@ import {
   CreateEntry,
   CurrentProject,
   DeleteEntry,
-  EngineVersion,
   OpenFile,
   OpenProjectDialog,
   ProjectSymbols,
@@ -61,7 +62,7 @@ document.querySelector('#app')!.innerHTML = `
     <button class="btn btn-quiet" id="sync" title="Show this line in the PDF (Cmd-J)">Find in PDF</button>
     <button class="icon-btn" id="palette" title="Command palette (Cmd-K)">⌘K</button>
     <button class="icon-btn" id="theme" title="Theme">◐</button>
-    <span class="engine" id="engine"></span>
+    <button class="engine" id="engine" title="TeX engine"></button>
   </header>
   <main class="panes">
     <aside class="sidebar">
@@ -854,6 +855,8 @@ function paletteActions(): PaletteAction[] {
     { id: 'log', title: 'Show raw log', run: () => { pinnedView = 'log'; showView('log', true); } },
     { id: 'theme', title: 'Switch theme (system, light, dark)', run: () => cycleTheme() },
     { id: 'settings', title: 'Customise colours…', hint: '⌘,', run: () => openSettings() },
+    { id: 'engine', title: 'TeX engine…', run: () => void refreshEngine().then((i) => openEngineSheet(i)) },
+    { id: 'about', title: 'About Lotus, and check for updates…', run: () => void openAboutSheet() },
     { id: 'fullscreen', title: 'Toggle full screen', hint: '⌃⌘F', run: () => void ToggleFullscreen() },
     {
       id: 'synctex',
@@ -926,6 +929,7 @@ el('zoom-level').addEventListener('click', () =>
 el('preview-focus').addEventListener('click', () => setPreviewFocus(!previewFocused));
 // The branch badge is the obvious place to look for anything Git-related.
 el('git').addEventListener('click', () => openGit());
+el('engine').addEventListener('click', () => void refreshEngine().then((i) => openEngineSheet(i)));
 el('theme').addEventListener('click', () => cycleTheme());
 
 // Shortcuts that must work wherever focus is — the tree, the preview, or the
@@ -1028,8 +1032,17 @@ async function init() {
   setPreviewFocus(false);
   renderSyncState();
 
-  EngineVersion()
-    .then((v) => (el('engine').textContent = v))
+  // The engine decides whether the app can do anything at all, so the first
+  // run stops here until there is one.
+  onEngineChange((info) => {
+    const button = el('engine');
+    button.textContent = engineLabel(info);
+    button.classList.toggle('engine-missing', !info.available && !info.installing);
+  });
+  refreshEngine()
+    .then((info) => {
+      if (!info.available) openEngineSheet(info, false);
+    })
     .catch((err) => console.error(err));
 
   await afterProjectChange(await CurrentProject());

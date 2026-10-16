@@ -263,12 +263,29 @@ func RebaseOntoRemote(ctx context.Context, dir, branch string) error {
 		return fmt.Errorf("%w: commit them before rebasing", ErrDirty)
 	}
 
+	// A rebase writes a fresh committer onto every commit it replays, so it
+	// needs an identity even though those commits already have authors.
+	// Checked here rather than left to git: discovering it halfway leaves a
+	// stopped rebase that looks exactly like a conflict.
+	if _, err := ConfiguredIdentity(dir); errors.Is(err, ErrNoIdentity) {
+		return err
+	}
+
 	_, err := runGit(ctx, dir, "rebase", "origin/"+branch)
 	if err == nil {
 		return nil
 	}
 	if rebaseInProgress(dir) {
-		return ErrRebaseConflict
+		// Stopped — but not necessarily on conflicts. A hook, a full disk, or
+		// anything else that halts a replay would otherwise be reported as a
+		// conflict, sending the writer to hunt for markers that do not exist
+		// and leaving the repository stuck mid-rebase.
+		if len(conflictedFiles(dir)) > 0 {
+			return ErrRebaseConflict
+		}
+		if abortErr := AbortRebase(ctx, dir); abortErr != nil {
+			return fmt.Errorf("%w (and the rebase could not be undone: %v)", err, abortErr)
+		}
 	}
 	return err
 }
@@ -292,7 +309,11 @@ func ContinueRebase(ctx context.Context, dir string) error {
 		return err
 	}
 	if _, err := runGit(ctx, dir, "rebase", "--continue"); err != nil {
-		if rebaseInProgress(dir) {
+		// As in RebaseOntoRemote: still stopped is not the same as stopped on
+		// conflicts. No abort here, though — the writer is deliberately in the
+		// middle of a rebase, and throwing their resolutions away is theirs to
+		// ask for.
+		if rebaseInProgress(dir) && len(conflictedFiles(dir)) > 0 {
 			return ErrRebaseConflict
 		}
 		return err

@@ -197,6 +197,14 @@ sequencing only — adjust as dogfooding reveals priorities.
 - **Done when:** a non-technical user can download, install, and compile a document
   without touching a terminal.
 
+> **Open question, raised while building this phase.** Crash and error reporting
+> is listed here as opt-in, while the README has kept telemetry out of scope
+> since Phase 0. The two cannot both hold. Nothing was built either way: an
+> opt-in reporter is a small piece of work, but it is the first thing in Lotus
+> that would send anything anywhere, and that is an owner's decision rather than
+> an implementation detail. A local error log with a "copy this into an issue"
+> button would satisfy most of the intent without a server, if that is the line.
+
 ---
 
 ## 6. State & data model (sketch)

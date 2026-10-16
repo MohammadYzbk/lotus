@@ -56,7 +56,20 @@ func runGit(ctx context.Context, dir string, args ...string) (string, error) {
 		return "", err
 	}
 
-	command := exec.CommandContext(ctx, binary, args...)
+	// Suppress git's post-command housekeeping. After a command that writes
+	// objects, git forks `maintenance run --auto`, which with the default
+	// gc.autoDetach keeps running after git has exited — a background process
+	// repacking the writer's repository moments after the app reported the
+	// operation finished, and able to hold a lock the next operation then
+	// trips over. Lotus drives git deliberately; housekeeping stays the
+	// writer's own, in their own terminal.
+	//
+	// Passed as flags rather than config so nothing is written into the
+	// writer's repository, and kept out of `args` so an error still reads as
+	// the command we meant to run.
+	full := append([]string{"-c", "gc.auto=0", "-c", "maintenance.auto=false"}, args...)
+
+	command := exec.CommandContext(ctx, binary, full...)
 	command.Dir = dir
 	command.Env = append(command.Environ(),
 		// Nothing here may wait for a human.

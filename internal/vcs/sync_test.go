@@ -231,6 +231,28 @@ func requireGit(t *testing.T) {
 	if !GitAvailable() {
 		t.Fatal("git is not installed; the rebase path cannot be exercised")
 	}
+	withGitIdentity(t)
+}
+
+// withGitIdentity gives the test a global Git identity of its own.
+//
+// A rebase writes a fresh committer onto every commit it replays, so the git
+// binary needs a name and email — which Commit does not, because it is handed
+// one. Without this the tests borrow whatever the developer happens to have
+// configured, pass on their machine, and fail on a build runner, which has no
+// identity at all. HOME is pointed at a directory the test wrote itself.
+func withGitIdentity(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	// Windows reads neither; git finds its global config through these.
+	t.Setenv("USERPROFILE", home)
+
+	config := "[user]\n\tname = Test\n\temail = test@example.com\n"
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // The happy path of the two-machine round trip: both moved, different files,
@@ -433,5 +455,63 @@ func TestRebaseRefusesWhileDirty(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(desktop, "scratch.tex")); err != nil {
 		t.Errorf("the uncommitted file was lost: %v", err)
+	}
+}
+
+// A rebase needs a committer identity, and git discovers that only once it has
+// already started replaying — leaving a stopped rebase that looks exactly like
+// a conflict. Reporting it as one sends the writer hunting for markers that do
+// not exist, so the check happens first and the message says what is wrong.
+func TestRebaseWithoutAnIdentity(t *testing.T) {
+	requireGit(t)
+	_, laptop, desktop := twoMachines(t)
+	branch := currentBranch(t, laptop)
+
+	commitFile(t, laptop, "a.tex", "from the laptop\n", "laptop work")
+	if err := Push(context.Background(), laptop, branch, ""); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, desktop, "b.tex", "from the desktop\n", "desktop work")
+	if err := Fetch(context.Background(), desktop, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Take the identity away, after the fixtures are built: Commit is handed
+	// one explicitly, so only the rebase notices.
+	empty := t.TempDir()
+	t.Setenv("HOME", empty)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(empty, ".config"))
+	t.Setenv("USERPROFILE", empty)
+
+	err := RebaseOntoRemote(context.Background(), desktop, branch)
+	if !errors.Is(err, ErrNoIdentity) {
+		t.Errorf("got %v, want ErrNoIdentity", err)
+	}
+	if errors.Is(err, ErrRebaseConflict) {
+		t.Error("a missing identity was reported as a conflict")
+	}
+	// And nothing is left half-done for the writer to discover later.
+	if rebaseInProgress(desktop) {
+		t.Error("a rebase was left in progress")
+	}
+}
+
+// git forks `maintenance run --auto` after a command that writes objects, and
+// the default gc.autoDetach lets it outlive git itself — a background process
+// repacking the repository after the app has said the operation finished, and
+// a writer into a directory nothing is expecting writes to any more.
+func TestGitCommandsSuppressBackgroundMaintenance(t *testing.T) {
+	requireGit(t)
+	dir := workingCopy(t)
+
+	for key, want := range map[string]string{"gc.auto": "0", "maintenance.auto": "false"} {
+		got, err := runGit(context.Background(), dir, "config", "--get", key)
+		if err != nil {
+			t.Errorf("%s is not set for our git commands: %v", key, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("%s: got %q, want %q", key, got, want)
+		}
 	}
 }

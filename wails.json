@@ -9,5 +9,12 @@
   "author": {
     "name": "Mohammad Yazbek",
     "email": "mohammad.yazbek@anghami.com"
+  },
+  "info": {
+    "companyName": "Lotus",
+    "productName": "Lotus",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 Mohammad Yazbek. MIT licensed.",
+    "comments": "An offline-first LaTeX editor"
   }
 }
