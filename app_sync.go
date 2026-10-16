@@ -150,11 +150,21 @@ func (a *App) RebaseOnRemote() SyncResult {
 		return a.syncResult(root, state.Branch, "", fmt.Errorf(
 			"the rebase stopped on %s. Open %s, remove the <<<<<<< markers, then continue",
 			describeFiles(sync.Conflicted), plural(len(sync.Conflicted), "it", "them")))
+	case errors.Is(err, vcs.ErrNoIdentity):
+		return a.syncResult(root, state.Branch, "", errors.New(noIdentityAdvice))
 	case err != nil:
 		return a.syncResult(root, state.Branch, "", err)
 	}
 	return a.syncResult(root, state.Branch, "Replayed your work on top of origin", nil)
 }
+
+// noIdentityAdvice explains the one failure a writer cannot work out from
+// git's own wording: a rebase writes a fresh committer onto every commit it
+// replays, so it needs a name and email even when the commits already have
+// authors.
+const noIdentityAdvice = "Git has no name and email configured, so a rebase cannot attribute " +
+	"the commits it replays. Set them with: git config --global user.name \"…\" " +
+	"and user.email \"…\""
 
 // ContinueRebase resumes once the conflicts have been edited away.
 func (a *App) ContinueRebase() SyncResult {
@@ -164,8 +174,8 @@ func (a *App) ContinueRebase() SyncResult {
 	}
 
 	err := vcs.ContinueRebase(a.context(), root)
-	if errors.Is(err, vcs.ErrRebaseConflict) {
-		return a.syncResult(root, "", "", err)
+	if errors.Is(err, vcs.ErrNoIdentity) {
+		return a.syncResult(root, "", "", errors.New(noIdentityAdvice))
 	}
 	if err != nil {
 		return a.syncResult(root, "", "", err)
