@@ -495,3 +495,23 @@ func TestRebaseWithoutAnIdentity(t *testing.T) {
 		t.Error("a rebase was left in progress")
 	}
 }
+
+// git forks `maintenance run --auto` after a command that writes objects, and
+// the default gc.autoDetach lets it outlive git itself — a background process
+// repacking the repository after the app has said the operation finished, and
+// a writer into a directory nothing is expecting writes to any more.
+func TestGitCommandsSuppressBackgroundMaintenance(t *testing.T) {
+	requireGit(t)
+	dir := workingCopy(t)
+
+	for key, want := range map[string]string{"gc.auto": "0", "maintenance.auto": "false"} {
+		got, err := runGit(context.Background(), dir, "config", "--get", key)
+		if err != nil {
+			t.Errorf("%s is not set for our git commands: %v", key, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("%s: got %q, want %q", key, got, want)
+		}
+	}
+}
