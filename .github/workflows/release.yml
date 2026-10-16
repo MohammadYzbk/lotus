@@ -157,8 +157,14 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          hdiutil create -volname Lotus -srcfolder build/bin/lotus.app \
-            -ov -format UDZO "build/bin/${{ matrix.artifact }}.dmg"
+          # Staged with a shortcut to /Applications beside the app, so the disk
+          # image is a drag-and-drop install for anyone not using the script.
+          stage="$RUNNER_TEMP/dmg"
+          mkdir -p "$stage"
+          cp -R build/bin/lotus.app "$stage/Lotus.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "Lotus ${{ steps.version.outputs.version }}" \
+            -srcfolder "$stage" -ov -format UDZO "build/bin/${{ matrix.artifact }}.dmg"
 
       # --- Windows -----------------------------------------------------------
 
@@ -211,6 +217,19 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      # scripts/install.sh checks the download against this before installing
+      # it. Same host serves both, so it catches a truncated download rather
+      # than attesting to anything.
+      - name: Checksums
+        run: |
+          cd artifacts
+          # Written outside the directory first: the shell creates the
+          # redirect target before the glob runs, so writing it in place would
+          # checksum the half-written file itself.
+          sha256sum ./* > "$RUNNER_TEMP/checksums.txt"
+          mv "$RUNNER_TEMP/checksums.txt" checksums.txt
+          cat checksums.txt
 
       - uses: softprops/action-gh-release@v2
         with:

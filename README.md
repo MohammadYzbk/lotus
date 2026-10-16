@@ -56,10 +56,26 @@ Download the build for your platform from the
 start writing. The TeX engine is inside: nothing else to install, and no
 terminal.
 
-Releases are not signed yet, so the first launch needs a nudge — on macOS,
-right-click the app and choose **Open**; on Windows, **More info → Run anyway**.
-Both warnings are expected, and [`docs/packaging.md`](docs/packaging.md)
-explains what would remove them.
+Releases are not signed yet, so macOS and Windows will both warn about the
+first launch. On macOS, open **System Settings → Privacy & Security** and press
+**Open Anyway**; on Windows, choose **More info → Run anyway**. Both warnings
+are expected, and [`docs/packaging.md`](docs/packaging.md) explains what would
+remove them.
+
+On macOS you can skip that step with the installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MohammadYzbk/lotus/main/scripts/install.sh | sh
+```
+
+It downloads the right build for your Mac, checks it against the release's
+checksums, copies it to `/Applications`, and clears the download flag that
+makes macOS refuse to open an unsigned app — on that one bundle, because you
+asked it to. `--prefix ~/Applications` installs without `sudo`, `--dmg <path>`
+installs a disk image someone handed you, and `--help` lists the rest.
+
+Read it before you run it, as you should with anything piped into a shell:
+[`scripts/install.sh`](scripts/install.sh).
 
 Building from source instead? See [Development](#development). A build made
 that way has no engine inside it, and offers to fetch one the first time it

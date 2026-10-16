@@ -114,6 +114,28 @@ warn about it, and on macOS the first launch needs right-click → Open. If
 releases go out unsigned, say so in the release notes: a writer should know the
 warning is expected rather than a sign that something is wrong.
 
+## Installing without a signature
+
+[`scripts/install.sh`](../scripts/install.sh) exists because of the gap above:
+until releases are signed with a Developer ID, Gatekeeper refuses to open them
+and the writer has to find the **Open Anyway** button in System Settings.
+
+Gatekeeper gates what a writer *launches*, not what they deliberately run in a
+terminal, so a script they invoke by name can clear the quarantine attribute on
+the way past. The script removes it from the one bundle it just installed and
+nothing else, and the README says plainly that it does so.
+
+This is a stopgap with a real cost: it asks people to pipe a remote script into
+a shell, which is a habit worth not teaching. For anyone you can reach
+directly, transferring the `.dmg` over `scp` or a USB stick sets no quarantine
+attribute at all and needs no script. The fix that removes the whole problem is
+a signed release.
+
+The release publishes a `checksums.txt`, which the installer checks the
+download against before mounting it. The same caveat applies as for the engine
+digests: one host serves both, so it catches a truncated download rather than
+attesting to anything.
+
 ## Updates
 
 Lotus checks for a newer release only when asked — from the palette, via
