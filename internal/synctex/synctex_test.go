@@ -511,3 +511,149 @@ func TestParseHandlesRecordsWithAColumn(t *testing.T) {
 		t.Errorf("Line = %d, want 42 (the column must not be read as the line)", records[0].Line)
 	}
 }
+
+// --- how much of a line's output the highlight covers -------------------------
+
+// boxesOn returns every piece of material a source line put on one page.
+//
+// It goes through candidatesOn rather than filtering on isTextish directly, so
+// it sees exactly what the highlight code sees — including the fallback for a
+// page whose records are all structural. Filtering independently made this
+// return nothing and quietly skipped the test it supports.
+func boxesOn(f *File, tag, line, page int) []Rect {
+	var out []Rect
+	for _, r := range f.candidatesOn(page) {
+		if r.Tag == tag && r.Line == line {
+			out = append(out, r.rect())
+		}
+	}
+	return out
+}
+
+// A line that produces a block of prose should light up the whole block, not
+// just the row it starts on. Showing only the first row was the old behaviour
+// and it made a paragraph look like a one-line entry.
+func TestForwardCoversEveryRowOfABlock(t *testing.T) {
+	f := load(t)
+	tag := tagFor(t, f)
+
+	// Line 13 is \lipsum[1-6]: six paragraphs from one source line. The text is
+	// attributed to the line that ends the paragraph, so Forward falls forward
+	// onto it — either way, putting the cursor there must light up the block.
+	rects := f.Forward(tag, 13)
+	if len(rects) < 10 {
+		t.Fatalf("six paragraphs produced %d bands; the highlight is not covering the block", len(rects))
+	}
+	// Still rows, though: one band per line of text, never a single box drawn
+	// around everything with the whitespace included.
+	for _, rect := range rects {
+		if rect.Height > 20 {
+			t.Errorf("page %d: band is %.0f tall — that is a block, not a row", rect.Page, rect.Height)
+		}
+	}
+}
+
+// The bands have to span the resolved line's material from its first row to its
+// last, with no row left out in between.
+func TestForwardCoversTheFullVerticalExtent(t *testing.T) {
+	f := load(t)
+	tag := tagFor(t, f)
+
+	rects := f.Forward(tag, 13)
+	if len(rects) == 0 {
+		t.Fatal("line 13 resolved to nothing")
+	}
+	// Line 13 carries no records of its own — TeX attributes a paragraph to the
+	// line that ends it — so Forward falls forward. The bands report which line
+	// they actually came from, and that is what their extent must be measured
+	// against.
+	resolved := rects[0].SourceLine
+
+	// Measure on whichever page holds the most of it.
+	counts := map[int]int{}
+	for _, rect := range rects {
+		counts[rect.Page]++
+	}
+	page, best := 0, 0
+	for candidate, n := range counts {
+		if n > best {
+			page, best = candidate, n
+		}
+	}
+
+	boxes := boxesOn(f, tag, resolved, page)
+	if len(boxes) < 5 {
+		t.Fatalf("line %d has only %d boxes on page %d; the fixture cannot show coverage",
+			resolved, len(boxes), page)
+	}
+
+	top, bottom := math.Inf(1), math.Inf(-1)
+	for _, box := range boxes {
+		top = math.Min(top, box.Y)
+		bottom = math.Max(bottom, box.Y+box.Height)
+	}
+
+	var bands []Rect
+	for _, rect := range rects {
+		if rect.Page == page {
+			bands = append(bands, rect)
+		}
+	}
+
+	first, last := bands[0], bands[len(bands)-1]
+	if first.Y > top+1 {
+		t.Errorf("highlight starts at y=%.1f but line %d's output starts at y=%.1f",
+			first.Y, resolved, top)
+	}
+	if last.Y+last.Height < bottom-1 {
+		t.Errorf("highlight ends at y=%.1f but line %d's output ends at y=%.1f",
+			last.Y+last.Height, resolved, bottom)
+	}
+
+	// And nothing skipped in the middle: consecutive bands must not leave a gap
+	// wider than the line spacing they sit on.
+	for i := 1; i < len(bands); i++ {
+		gap := bands[i].Y - (bands[i-1].Y + bands[i-1].Height)
+		if gap > bands[i-1].Height*1.5+2 {
+			t.Errorf("a %.1fpt gap between bands %d and %d leaves a row unhighlighted", gap, i-1, i)
+		}
+	}
+}
+
+// Bands arrive in reading order and never overlap, so drawing them produces a
+// clean run rather than stacked boxes with doubled edges.
+func TestForwardBandsAreOrderedAndDisjoint(t *testing.T) {
+	f := load(t)
+	tag := tagFor(t, f)
+
+	rects := f.Forward(tag, 13)
+	for i := 1; i < len(rects); i++ {
+		previous, current := rects[i-1], rects[i]
+		if current.Page < previous.Page {
+			t.Fatalf("band %d is on page %d, after a band on page %d", i, current.Page, previous.Page)
+		}
+		if current.Page != previous.Page {
+			continue
+		}
+		if current.Y < previous.Y {
+			t.Errorf("band %d (y=%.1f) comes before band %d (y=%.1f) on page %d",
+				i, current.Y, i-1, previous.Y, current.Page)
+		}
+		if current.Y < previous.Y+previous.Height-0.5 {
+			t.Errorf("bands %d and %d overlap on page %d: %.1f..%.1f then %.1f",
+				i-1, i, current.Page, previous.Y, previous.Y+previous.Height, current.Y)
+		}
+	}
+}
+
+// A heading is one row and must stay one band; the change must not turn every
+// highlight into a multi-row smear.
+func TestForwardOnASingleRowStaysOneBand(t *testing.T) {
+	f := load(t)
+	tag := tagFor(t, f)
+
+	// Line 10 is \section{First section}.
+	if rects := f.Forward(tag, 10); len(rects) != 1 {
+		t.Errorf("a one-line heading produced %d bands, want 1", len(rects))
+	}
+}

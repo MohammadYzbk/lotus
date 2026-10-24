@@ -715,6 +715,12 @@ async function jumpToSource(page: number, x: number, y: number) {
     await openPath(loc.file);
   }
   editor?.goToLine(loc.line);
+
+  // Replace the single clicked box with everything that line produced, so both
+  // directions of SyncTeX show the same area. Moving the cursor would usually
+  // trigger this anyway, but not when it was already on the line that was
+  // clicked — which is exactly when the mismatch would be most visible.
+  syncToCursor(loc.line, false);
 }
 
 // --- the problems drawer -----------------------------------------------------

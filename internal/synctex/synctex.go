@@ -462,14 +462,16 @@ func (f *File) candidatesOn(page int) []Record {
 	return out
 }
 
-// rectsFor collects the areas for an exact tag and line, one band per page.
+// rectsFor collects the areas for an exact tag and line, in page then reading
+// order.
 //
 // A source line can produce a great deal of output — \lipsum, or a macro
-// expanding to paragraphs — and highlighting all of it would light up the whole
-// page. What a writer wants is where the line *starts*, so this takes the topmost
-// piece of output and extends it across the rest of that output line.
+// expanding to paragraphs — and all of it is returned: the area a line covers is
+// what the writer asked to see. Each row comes back as its own band rather than
+// one bounding box, so the highlight traces the text instead of boxing in the
+// whitespace around it.
 func (f *File) rectsFor(tag, line int) []Rect {
-	byPage := map[int]Rect{}
+	byPage := map[int][]Rect{}
 
 	for page := 1; page <= f.PageCount; page++ {
 		var matches []Rect
@@ -482,37 +484,41 @@ func (f *File) rectsFor(tag, line int) []Rect {
 			continue
 		}
 
-		band := chooseBand(matches)
-		band.SourceLine = line
-		byPage[page] = band
+		bands := bandsIn(matches)
+		for i := range bands {
+			bands[i].SourceLine = line
+		}
+		byPage[page] = bands
 	}
 
 	if len(byPage) == 0 {
 		return nil
 	}
-	out := make([]Rect, 0, len(byPage))
+	var out []Rect
 	for page := 1; page <= f.PageCount; page++ {
-		if rect, ok := byPage[page]; ok {
-			out = append(out, rect)
-		}
+		out = append(out, byPage[page]...)
 	}
 	return out
 }
 
-// chooseBand picks which piece of a source line's output to point at.
+// bandsIn turns a source line's boxes on one page into the rows it occupies.
 //
-// A line's boxes are not necessarily one run of text. When a file is \input,
-// TeX first finishes the paragraph already in progress and attributes those
-// broken-off lines to the *new* file's first line — so \section{Method} on line 1
-// of a chapter owns nine lines of the previous chapter's paragraph as well as its
-// own heading. Taking the topmost box therefore points at the end of the previous
-// chapter, several inches above the heading the writer asked for.
+// Two problems are solved here, and they pull in opposite directions.
 //
-// So: split the boxes into clusters separated by vertical gaps, keep the last
-// cluster, and return its first row. That gives the heading in the case above,
-// the first row of a wrapped sentence (one cluster), and the start of a paragraph
-// attributed to its terminating blank line (also one cluster).
-func chooseBand(matches []Rect) Rect {
+// The first is spillover. A line's boxes are not necessarily one run of text.
+// When a file is \input, TeX first finishes the paragraph already in progress
+// and attributes those broken-off lines to the *new* file's first line — so
+// \section{Method} on line 1 of a chapter owns nine lines of the previous
+// chapter's paragraph as well as its own heading. Pointing at all of that would
+// send the writer inches above the heading they asked for. So the boxes are
+// split into clusters separated by vertical gaps and only the last is kept.
+//
+// The second is extent. Within that cluster the writer wants the whole area
+// their line produced, not just where it starts: a wrapped sentence is three
+// rows, a paragraph is ten. So every row of the chosen cluster is returned,
+// each one widened across the boxes sitting beside it. Drawn together they
+// read like a text selection rather than a single box.
+func bandsIn(matches []Rect) []Rect {
 	sorted := make([]Rect, len(matches))
 	copy(sorted, matches)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Y < sorted[j].Y })
@@ -528,15 +534,20 @@ func chooseBand(matches []Rect) Rect {
 		}
 	}
 
-	// The first row of that cluster, widened to include anything beside it — a
-	// section number sits in its own box next to the title.
-	band := sorted[start]
+	var bands []Rect
+	// seed is the first box of the row being built. Overlap is tested against it
+	// rather than against the growing union, so one box with an unusually deep
+	// descender cannot stretch a row until it swallows the next one.
+	var seed Rect
 	for _, m := range sorted[start:] {
-		if m.Y < band.Y+band.Height && m.Y+m.Height > band.Y {
-			band = union(band, m)
+		if len(bands) > 0 && m.Y < seed.Y+seed.Height && m.Y+m.Height > seed.Y {
+			bands[len(bands)-1] = union(bands[len(bands)-1], m)
+			continue
 		}
+		bands = append(bands, m)
+		seed = m
 	}
-	return band
+	return bands
 }
 
 func union(a, b Rect) Rect {
