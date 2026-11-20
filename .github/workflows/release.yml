@@ -32,7 +32,7 @@ jobs:
       matrix:
         include:
           - name: macOS (Apple silicon)
-            runner: macos-14
+            runner: macos-15
             platform: darwin/arm64
             artifact: lotus-macos-arm64
           - name: macOS (Intel)

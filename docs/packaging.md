@@ -146,7 +146,8 @@ exist, rather than failing.
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | A base64 code-signing `.pfx` and its password |
 
 An unsigned build works, but macOS Gatekeeper and Windows SmartScreen will both
-warn about it, and on macOS the first launch needs right-click → Open. If
+warn about it, and on macOS the first launch needs **Open Anyway** in System
+Settings → Privacy & Security. If
 releases go out unsigned, say so in the release notes: a writer should know the
 warning is expected rather than a sign that something is wrong.
 
