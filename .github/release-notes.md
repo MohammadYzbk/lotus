@@ -22,9 +22,14 @@ code-signing reputation, and is expected for Lotus at this stage.
 
 - **`lotus-macos-arm64.dmg`** for Apple silicon, **`lotus-macos-amd64.dmg`**
   for Intel. Open it and drag Lotus to Applications. If macOS refuses to open
-  it, right-click the app and choose **Open**.
+  it, open **System Settings → Privacy & Security** and press **Open Anyway**.
+- Or skip that step with the install script, which picks the right build and
+  checks it against `checksums.txt`:
+  `curl -fsSL https://raw.githubusercontent.com/MohammadYzbk/lotus/main/scripts/install.sh | sh`
 
 ### Linux
 
 - **`lotus-linux-amd64.tar.gz`** — extract it and run `lotus`, keeping the
   `engine` folder beside it. Needs GTK 3 and WebKitGTK 4.0.
+
+`checksums.txt` lists the SHA-256 of every file above.
