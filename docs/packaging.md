@@ -15,7 +15,7 @@ to arrange.
 | Platform | Artifact | The engine lives at |
 | --- | --- | --- |
 | macOS | `lotus-macos-{arm64,amd64}.dmg` | `Lotus.app/Contents/Resources/engine/tectonic` |
-| Windows | `lotus-windows-amd64-installer.exe` | `engine\tectonic.exe`, beside `lotus.exe` |
+| Windows | `lotus-windows-amd64-installer.exe`, `lotus-windows-amd64-portable.zip` | `engine\tectonic.exe`, beside `lotus.exe` |
 | Linux | `lotus-linux-amd64.tar.gz` | `engine/tectonic`, beside `lotus` |
 
 Those paths are not arbitrary: they are the first places
@@ -88,13 +88,49 @@ told it is out of date — it is not on the release line at all.
 ## The release workflow
 
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) builds all
-four artifacts on a tag push (`v*`), or on a manual run that builds without
+four platforms on a tag push (`v*`), or on a manual run that builds without
 publishing, so a release can be rehearsed.
+
+A tag push ends in a **draft** release on the
+[releases page](https://github.com/MohammadYzbk/lotus/releases), headed by the
+install notes in [`.github/release-notes.md`](../.github/release-notes.md) and
+followed by GitHub's generated changelog. The draft is published by hand once
+its assets look right. A platform whose build fails is left off the draft
+rather than holding the others back, so check that every artifact is there
+before publishing.
+
+The tag's version is stamped into `wails.json` before building, so the Windows
+file properties, the installer's Apps & features entry, and the macOS
+`Info.plist` all carry it. Those fields take only numbers and dots, so a
+pre-release tag such as `v1.2.0-beta.1` is stamped there as `1.2.0`;
+`main.version`, which the update check reads, keeps the full version.
 
 Order matters in one place: **the engine is bundled before anything is signed.**
 A signature seals the bundle's contents, and a file added afterwards invalidates
 it. On macOS the nested engine is signed first and the app second, because
 `codesign` seals inner code into the outer signature.
+
+### Windows
+
+The Windows leg runs in this order:
+
+1. `wails build -nsis` compiles `lotus.exe`. The installer it makes is thrown
+   away; the flag is there because it renders `wails_tools.nsh` and fetches the
+   WebView2 bootstrapper that the installer script needs.
+2. The engine is bundled into `build\bin\engine`.
+3. `lotus.exe` and `tectonic.exe` are signed, with
+   [`build/windows/sign.ps1`](../build/windows/sign.ps1).
+4. `makensis` builds the installer from
+   [`project.nsi`](../build/windows/installer/project.nsi), packing the signed
+   executable and the engine. It is called directly because a second
+   `wails build -nsis` would recompile `lotus.exe` over the signed one, and
+   Wails' own installer packs only the executable.
+5. The installer is signed.
+6. `lotus.exe` and `engine\` are zipped as the portable build.
+
+The installer only packs an engine when `LOTUS_ENGINE_DIR` is defined, which
+the workflow does. A local `wails build -nsis` therefore still works, and makes
+an installer without an engine that falls through to the first-run screen.
 
 ### Signing
 
@@ -110,7 +146,8 @@ exist, rather than failing.
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | A base64 code-signing `.pfx` and its password |
 
 An unsigned build works, but macOS Gatekeeper and Windows SmartScreen will both
-warn about it, and on macOS the first launch needs right-click → Open. If
+warn about it, and on macOS the first launch needs **Open Anyway** in System
+Settings → Privacy & Security. If
 releases go out unsigned, say so in the release notes: a writer should know the
 warning is expected rather than a sign that something is wrong.
 
@@ -158,6 +195,10 @@ the writer there is a new version and opening the page.
   yet. The signing steps are written against Apple's and Microsoft's documented
   tools and are skipped without secrets, so the first real run of them will be
   their first test.
+- **The Windows installer has never been built.** The NSIS changes and the
+  makensis call were written against Wails' generated installer script, but
+  NSIS was not available where they were written, so the first tag push is
+  their first run.
 - **Only macOS/arm64 has been built and verified end to end** — built, engine
   bundled, engine located from inside the bundle and executed. The other three
   platforms are exercised only by the cross-platform code paths and their unit

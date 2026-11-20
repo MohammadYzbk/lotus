@@ -56,6 +56,9 @@ Download the build for your platform from the
 start writing. The TeX engine is inside: nothing else to install, and no
 terminal.
 
+On Windows, take the installer, or the portable `.zip` if you cannot install
+software on that machine.
+
 Releases are not signed yet, so macOS and Windows will both warn about the
 first launch. On macOS, open **System Settings → Privacy & Security** and press
 **Open Anyway**; on Windows, choose **More info → Run anyway**. Both warnings

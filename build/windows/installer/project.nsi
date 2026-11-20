@@ -96,6 +96,16 @@ Section
 
     !insertmacro wails.files
 
+    # The bundled TeX engine, beside the executable where internal/engine
+    # looks first. Only the release workflow defines LOTUS_ENGINE_DIR, so a
+    # local `wails build -nsis` still works without an engine, and a release
+    # whose engine directory is empty fails here instead of shipping without.
+    !ifdef LOTUS_ENGINE_DIR
+        SetOutPath "$INSTDIR\engine"
+        File /r "${LOTUS_ENGINE_DIR}\*.*"
+        SetOutPath $INSTDIR
+    !endif
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
