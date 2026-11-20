@@ -56,6 +56,9 @@ Download the build for your platform from the
 start writing. The TeX engine is inside: nothing else to install, and no
 terminal.
 
+On Windows, take the installer, or the portable `.zip` if you cannot install
+software on that machine.
+
 Releases are not signed yet, so the first launch needs a nudge — on macOS,
 right-click the app and choose **Open**; on Windows, **More info → Run anyway**.
 Both warnings are expected, and [`docs/packaging.md`](docs/packaging.md)
